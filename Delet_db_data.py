@@ -1,3 +1,4 @@
+#<<<<<<< HEAD
 import sys
 from sqlalchemy import text
 from database import SessionLocal
@@ -48,4 +49,3 @@ def delete_all_data():
         db.close()
 
 if __name__ == "__main__":
-    delete_all_data()
