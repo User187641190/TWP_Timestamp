@@ -66,8 +66,7 @@ class Product(Base):
 
     Product_id = Column(String(150), primary_key=True)
     Product_name = Column(String(500))
-    Price = Column(Integer(200))
-
+    Price = Column(Integer)
     bill_items = relationship("BillItem", back_populates="product")
 
 class BillItem(Base):
