@@ -38,10 +38,10 @@ class ProductBase(BaseModel):
     Price: float
 
 class ProductCreate(ProductBase):
-    Product_id: str  # สมมติว่าเป็นรหัสสินค้า เช่น 'P-001'
+    Product_id: int  # สมมติว่าเป็นรหัสสินค้า เช่น 'P-001'
 
 class Product(ProductBase):
-    Product_id: str
+    Product_id: int
     class Config:
         from_attributes = True
 
@@ -66,7 +66,7 @@ class VehicleShow(BaseModel):
         from_attributes = True
 
 class ProductShow(BaseModel):
-    Product_id: str
+    Product_id: int
     Product_name: str
     class Config:
         from_attributes = True
@@ -118,7 +118,7 @@ class Vehicle(VehicleBase):
 #——————————————————————————            
 class BillItemBase(BaseModel):
     Quantity: int
-    Product_Product_id: str  # รับแค่ ID สินค้า
+    Product_Product_id: int  # รับแค่ ID สินค้า
 
 class BillItemCreate(BillItemBase):
     pass

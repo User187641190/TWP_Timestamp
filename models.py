@@ -41,10 +41,13 @@ class Vehicle(Base):
     Status = Column(SQLAlchemyEnum(VehicleStatus), default=VehicleStatus.AVAILABLE, nullable=False)
     deliveries = relationship("DeliveryBill", back_populates="vehicle")
 
+
 class DeliveryBill(Base):
     __tablename__ = "Delivery_bill"
 
-    bill_id = Column(String(10), primary_key=True)
+    bill_id = Column(Integer, primary_key=True)
+    Receiver_name = Column(String(100), nullable=True)
+    Receiver_phone = Column(String(20), nullable=True)
     start_time = Column(DateTime)
     arrive_time = Column(DateTime)
     finish_time = Column(DateTime)
@@ -64,7 +67,7 @@ class DeliveryBill(Base):
 class Product(Base):
     __tablename__ = "Product"
 
-    Product_id = Column(String(150), primary_key=True)
+    Product_id = Column(Integer, primary_key=True)
     Product_name = Column(String(500))
     Price = Column(Integer)
     bill_items = relationship("BillItem", back_populates="product")
@@ -72,10 +75,10 @@ class Product(Base):
 class BillItem(Base):
     __tablename__ = "Bill_item"
 
-    Bill_item_id = Column(String(50), primary_key=True) # ใน SQL ไม่ได้กำหนด PK ชัดเจนแต่ควรมี หรือใช้ Composite Key
+    Bill_item_id = Column(Integer, primary_key=True) # ใน SQL ไม่ได้กำหนด PK ชัดเจนแต่ควรมี หรือใช้ Composite Key
     Quantity = Column(Integer)
-    Delivery_bill_bill_id = Column(String(10), ForeignKey("Delivery_bill.bill_id"), nullable=False)
-    Product_Product_id = Column(String(150), ForeignKey("Product.Product_id"), nullable=False)
+    Delivery_bill_bill_id = Column(Integer, ForeignKey("Delivery_bill.bill_id"), nullable=False)
+    Product_Product_id = Column(Integer, ForeignKey("Product.Product_id"), nullable=False)
 
     delivery_bill = relationship("DeliveryBill", back_populates="items")
     product = relationship("Product", back_populates="bill_items")
@@ -87,7 +90,7 @@ class DeliveryTimeLog(Base):
     Event_time = Column(String(200))
     Timestamp = Column(Date)
     Remark = Column(String(2000))
-    bill_id = Column(String(10), ForeignKey("Delivery_bill.bill_id"), nullable=False)
+    bill_id = Column(Integer, ForeignKey("Delivery_bill.bill_id"), nullable=False)
 
     delivery_bill = relationship("DeliveryBill", back_populates="time_logs")
 
