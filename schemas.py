@@ -8,7 +8,9 @@ from models import EmployeeStatus, VehicleStatus, DeliveryBillStatus
 # 1. Base Schemas & Shared (พื้นฐาน)
 # ==========================================
 
+#——————————————————————————            
 # --- User / Login System ---
+#——————————————————————————            
 class UserBase(BaseModel):
     User_id: int
     Username: str
@@ -26,8 +28,11 @@ class User(UserBase):
     Role_role_id: int
     
     class Config:
-        orm_mode = True
+        from_attributes = True
+#——————————————————————————            
 # --- Product (สินค้า) ---
+#——————————————————————————        
+
 class ProductBase(BaseModel):
     Product_name: str
     Price: float
@@ -70,7 +75,10 @@ class ProductShow(BaseModel):
 # 3. Main Entity Schemas (ข้อมูลหลัก)
 # ==========================================
 
+#——————————————————————————            
 # --- Employee ---
+#——————————————————————————            
+
 class EmployeeBase(BaseModel):
     Employee_name: str
     Phone: Optional[str] = None
@@ -85,8 +93,9 @@ class Employee(EmployeeBase):
     # deliveries: List['DeliveryBillBase'] = [] 
     class Config:
         from_attributes = True
-
+#——————————————————————————            
 # --- Vehicle ---
+#——————————————————————————            
 class VehicleBase(BaseModel):
     license_plate: str
     Vehicle_description: str | None=None
@@ -104,7 +113,9 @@ class Vehicle(VehicleBase):
 # 4. Transaction Schemas (รายการย่อยในบิล)
 # ==========================================
 
+#——————————————————————————            
 # --- Bill Item (รายการสินค้าในบิล) ---
+#——————————————————————————            
 class BillItemBase(BaseModel):
     Quantity: int
     Product_Product_id: str  # รับแค่ ID สินค้า
@@ -118,7 +129,9 @@ class BillItem(BillItemBase):
     class Config:
         from_attributes = True
 
+#——————————————————————————            
 # --- Time Log (ประวัติเวลา) ---
+#——————————————————————————            
 class DeliveryTimeLogBase(BaseModel):
     Event_time: str      # เช่น "10:30"
     Remark: Optional[str] = None
@@ -136,7 +149,9 @@ class DeliveryTimeLog(DeliveryTimeLogBase):
 # 5. Delivery Bill (พระเอกของเรา)
 # ==========================================
 
+#——————————————————————————            
 # --- Base ---
+#——————————————————————————            
 class DeliveryBillBase(BaseModel):
     bill_id: str
     delivery_date: Optional[date] = None
@@ -146,12 +161,10 @@ class DeliveryBillBase(BaseModel):
     Employee_Employee_id: int
     Vehicle_Vehicle_id: int
 
-# --- Create (POST) ---
 class DeliveryBillCreate(DeliveryBillBase):
     # สามารถรับรายการสินค้าพร้อมตอนสร้างบิลได้เลย (Optional)
     items: Optional[List[BillItemCreate]] = []
 
-# --- Update (PUT) ---
 class DeliveryBillUpdate(BaseModel):
     start_time: Optional[datetime] = None
     arrive_time: Optional[datetime] = None
@@ -160,7 +173,6 @@ class DeliveryBillUpdate(BaseModel):
     Employee_Employee_id: Optional[int] = None
     Vehicle_Vehicle_id: Optional[int] = None
 
-# --- Read / Response (GET) ---
 class DeliveryBill(DeliveryBillBase):
     start_time: Optional[datetime] = None
     arrive_time: Optional[datetime] = None
@@ -175,7 +187,9 @@ class DeliveryBill(DeliveryBillBase):
     class Config:
         from_attributes = True
 
+#——————————————————————————            
 # - - - Roles - - - 
+#——————————————————————————            
 class RoleBase(BaseModel):
     role_id: int
     role_name: str
@@ -186,4 +200,4 @@ class RoleCreate(RoleBase):
 
 class Role(RoleBase):
     class Config:
-        orm_mode = True
+        from_attributes = True

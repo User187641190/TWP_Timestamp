@@ -197,34 +197,28 @@ def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return roles
 
 # ==========================================
-# 👤 USER (ผู้ใช้งานระบบ)
+#  USER 
 # ==========================================
 
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # เช็คว่ามี User ID นี้หรือยัง
     db_user = db.query(models.User).filter(models.User.User_id == user.User_id).first()
     if db_user:
         raise HTTPException(status_code=400, detail="User ID already exists")
     
-    # เช็คว่า Employee มีจริงไหม? (ป้องกัน Error Foreign Key)
     db_emp = db.query(models.Employee).filter(models.Employee.Employee_id == user.Employee_id).first()
     if not db_emp:
         raise HTTPException(status_code=404, detail="Employee ID not found (Must create Employee first)")
-
-    # เช็คว่า Role มีจริงไหม?
+    
     db_role = db.query(models.Role).filter(models.Role.role_id == user.Role_role_id).first()
     if not db_role:
         raise HTTPException(status_code=404, detail="Role ID not found (Must create Role first)")
-
-    # สร้าง User ใหม่
-    # ⚠️ หมายเหตุ: ตรงนี้ต้อง Map ชื่อ field ให้ตรงกับ models.py ของคุณเป๊ะๆ
+    
     new_user = models.User(
         User_id=user.User_id,
         Username=user.Username,
         Password_hash=user.Password_hash,
         status=user.status,
-        # Map ข้อมูลจาก Schema (user.Employee_id) เข้า Model (Employee_Employee_id)
         Employee_Employee_id=user.Employee_id, 
         Role_role_id=user.Role_role_id
     )
