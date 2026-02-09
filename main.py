@@ -158,8 +158,6 @@ def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(
     
     return new_log
 
-# Endpoint แถม: สำหรับเคลียร์ข้อมูล (ใช้ตอน Test)
-# ระวัง! ห้ามเปิดใช้บน Production
 @app.delete("/debug/clear-all")
 def clear_database(db: Session = Depends(get_db)):
     try:
@@ -173,3 +171,70 @@ def clear_database(db: Session = Depends(get_db)):
         return {"message": "All transaction data cleared"}
     except Exception as e:
         db.rollback()
+
+
+@app.post("/roles/", response_model=schemas.Role)
+def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
+    # เช็คว่ามี ID นี้หรือยัง
+    db_role = db.query(models.Role).filter(models.Role.role_id == role.role_id).first()
+    if db_role:
+        raise HTTPException(status_code=400, detail="Role ID already exists")
+    
+    # สร้าง Role ใหม่
+    new_role = models.Role(
+        role_id=role.role_id,
+        role_name=role.role_name,
+        description=role.description
+    )
+    db.add(new_role)
+    db.commit()
+    db.refresh(new_role)
+    return new_role
+
+@app.get("/roles/", response_model=list[schemas.Role])
+def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    roles = db.query(models.Role).offset(skip).limit(limit).all()
+    return roles
+
+# ==========================================
+# 👤 USER (ผู้ใช้งานระบบ)
+# ==========================================
+
+@app.post("/users/", response_model=schemas.User)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # เช็คว่ามี User ID นี้หรือยัง
+    db_user = db.query(models.User).filter(models.User.User_id == user.User_id).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="User ID already exists")
+    
+    # เช็คว่า Employee มีจริงไหม? (ป้องกัน Error Foreign Key)
+    db_emp = db.query(models.Employee).filter(models.Employee.Employee_id == user.Employee_id).first()
+    if not db_emp:
+        raise HTTPException(status_code=404, detail="Employee ID not found (Must create Employee first)")
+
+    # เช็คว่า Role มีจริงไหม?
+    db_role = db.query(models.Role).filter(models.Role.role_id == user.Role_role_id).first()
+    if not db_role:
+        raise HTTPException(status_code=404, detail="Role ID not found (Must create Role first)")
+
+    # สร้าง User ใหม่
+    # ⚠️ หมายเหตุ: ตรงนี้ต้อง Map ชื่อ field ให้ตรงกับ models.py ของคุณเป๊ะๆ
+    new_user = models.User(
+        User_id=user.User_id,
+        Username=user.Username,
+        Password_hash=user.Password_hash,
+        status=user.status,
+        # Map ข้อมูลจาก Schema (user.Employee_id) เข้า Model (Employee_Employee_id)
+        Employee_Employee_id=user.Employee_id, 
+        Role_role_id=user.Role_role_id
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.get("/users/", response_model=list[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    users = db.query(models.User).offset(skip).limit(limit).all()
+    return users
