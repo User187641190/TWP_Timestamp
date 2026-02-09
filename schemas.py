@@ -10,18 +10,23 @@ from models import EmployeeStatus, VehicleStatus, DeliveryBillStatus
 
 # --- User / Login System ---
 class UserBase(BaseModel):
+    User_id: int
     Username: str
-    Role: str  # เช่น 'Admin', 'Supervisor', 'CEO'
+    status: str | None = "Active" 
 
 class UserCreate(UserBase):
-    Password: str  # รับ Password เข้ามาตอนสร้าง
+    Password_hash: str
+    # รับค่า ID แบบสั้นๆ เข้ามา
+    Employee_id: int 
+    Role_role_id: int 
 
 class User(UserBase):
-    User_id: int
-    # ไม่ return Password กลับไป
+    # เวลาส่งข้อมูลกลับ ไม่ควรส่ง Password_hash กลับไป (เพื่อความปลอดภัย)
+    Employee_Employee_id: int
+    Role_role_id: int
+    
     class Config:
-        from_attributes = True
-
+        orm_mode = True
 # --- Product (สินค้า) ---
 class ProductBase(BaseModel):
     Product_name: str
@@ -169,3 +174,16 @@ class DeliveryBill(DeliveryBillBase):
 
     class Config:
         from_attributes = True
+
+# - - - Roles - - - 
+class RoleBase(BaseModel):
+    role_id: int
+    role_name: str
+    description: str | None = None
+
+class RoleCreate(RoleBase):
+    pass
+
+class Role(RoleBase):
+    class Config:
+        orm_mode = True
