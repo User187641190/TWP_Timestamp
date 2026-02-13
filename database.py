@@ -7,8 +7,6 @@ from sqlalchemy.orm import sessionmaker
 # ถ้าใช้ SQLite (ไฟล์อยู่ในเครื่อง) ให้ใช้บรรทัดล่างนี้:
 SQLALCHEMY_DATABASE_URL = "oracle+oracledb://Backend:BackendPass@localhost:1521/?service_name=FREEPDB1"
 
-# ถ้าใช้ Oracle ต้องแก้เป็น: "oracle+cx_oracle://user:password@host:port/sid"
-
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL # check_same_thread ใช้เฉพาะกับ SQLite
 )

@@ -18,3 +18,5 @@ def Test_db():
         print("\n❌ Connection Failed!")
         print(f"Error Type: {type(e).__name__}")
         print(f"Error Details: {e}")
+
+Test_db()

@@ -73,12 +73,11 @@ class Product(Base):
 
 class BillItem(Base):
     __tablename__ = "Bill_item"
-
     Bill_item_id = Column(Integer, primary_key=True) # ใน SQL ไม่ได้กำหนด PK ชัดเจนแต่ควรมี หรือใช้ Composite Key
     Quantity = Column(Integer)
     Delivery_bill_bill_id = Column(Integer, ForeignKey("Delivery_bill.bill_id"), nullable=False)
     Product_Product_id = Column(Integer, ForeignKey("Product.Product_id"), nullable=False)
-
+    #relation
     delivery_bill = relationship("DeliveryBill", back_populates="items")
     product = relationship("Product", back_populates="bill_items")
 
