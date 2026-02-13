@@ -117,7 +117,7 @@ class Vehicle(VehicleBase):
 # --- Bill Item (รายการสินค้าในบิล) ---
 #——————————————————————————            
 class BillItemBase(BaseModel):
-    Product_id: str = Field(alias="Product_Product_id") # แบบนี้จะส่งคำว่า Product_id ได้เลย
+    Product_id: str = Field(alias="Product_id") # แบบนี้จะส่งคำว่า Product_id ได้เลย
     Quantity: int
 class BillItemCreate(BillItemBase):
     pass
@@ -152,11 +152,12 @@ class DeliveryTimeLog(DeliveryTimeLogBase):
 # --- Base ---
 #——————————————————————————            
 class DeliveryBillBase(BaseModel):
-    bill_id: str
+    bill_id: int
     delivery_date: Optional[date] = None
     status: DeliveryBillStatus = DeliveryBillStatus.AWAIT
     Receiver_name : str     #Name
-    Receiver_phone : str    #011-111-1111
+    Receiver_phone : str
+    start_time : datetime    #011-111-1111
     Employee_Employee_id: int   #1,2,3 etc.
     Vehicle_Vehicle_id: int #1,2,3 etc.
 
