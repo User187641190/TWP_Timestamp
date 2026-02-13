@@ -53,7 +53,6 @@ class DeliveryBill(Base):
     finish_time = Column(DateTime)
     delivery_date = Column(Date)
     status = Column(SQLAlchemyEnum(DeliveryBillStatus), default=DeliveryBillStatus.AWAIT ,nullable=False)
-    
     # Foreign Keys map ตาม SQL ที่ให้มา
     Employee_Employee_id = Column(Integer, ForeignKey("Employee.Employee_id"), nullable=False)
     Vehicle_Vehicle_id = Column(Integer, ForeignKey("Vehicle.Vehicle_id"), nullable=False)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, date
 # Import Enums จาก models.py (ต้องมีไฟล์ models.py ที่ประกาศ Enum ไว้แล้วนะ)
@@ -117,9 +117,8 @@ class Vehicle(VehicleBase):
 # --- Bill Item (รายการสินค้าในบิล) ---
 #——————————————————————————            
 class BillItemBase(BaseModel):
+    Product_id: str = Field(alias="Product_Product_id") # แบบนี้จะส่งคำว่า Product_id ได้เลย
     Quantity: int
-    Product_Product_id: int  # รับแค่ ID สินค้า
-
 class BillItemCreate(BillItemBase):
     pass
 
@@ -156,10 +155,10 @@ class DeliveryBillBase(BaseModel):
     bill_id: str
     delivery_date: Optional[date] = None
     status: DeliveryBillStatus = DeliveryBillStatus.AWAIT
-    
-    # FK (รับมาเป็น ID ตอนสร้าง)
-    Employee_Employee_id: int
-    Vehicle_Vehicle_id: int
+    Receiver_name : str     #Name
+    Receiver_phone : str    #011-111-1111
+    Employee_Employee_id: int   #1,2,3 etc.
+    Vehicle_Vehicle_id: int #1,2,3 etc.
 
 class DeliveryBillCreate(DeliveryBillBase):
     # สามารถรับรายการสินค้าพร้อมตอนสร้างบิลได้เลย (Optional)
