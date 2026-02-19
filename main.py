@@ -3,11 +3,16 @@ from sqlalchemy.orm import Session
 from typing import List
 import uuid
 from datetime import datetime
+from fastapi.security import OAuth2PasswordRequestForm
+# เพิ่มไว้ใน main.py
+
 
 # Import ไฟล์ภายในโปรเจค
 import models
+from models import User
 import schemas
 from database import SessionLocal, engine
+from deps import get_current_user, check_ceo_role , check_employee_role , check_admin_role
 
 # สร้าง Tables ใน Database (ถ้ารันครั้งแรก)
 models.Base.metadata.create_all(bind=engine)
@@ -26,13 +31,14 @@ def get_db():
 # 1. Management APIs (Employee / Vehicle / Product)
 # ==========================================
 
+
 @app.get("/")
 def Nothing():
     return ('Nothing , everything is nothing')
 
 # --- Employee ---
 @app.post("/employees/", response_model=schemas.Employee)
-def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
+def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     db_employee = models.Employee(**employee.model_dump())
     db.add(db_employee)
     db.commit()
@@ -40,12 +46,12 @@ def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_
     return db_employee
 
 @app.get("/employees/", response_model=List[schemas.Employee])
-def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     return db.query(models.Employee).offset(skip).limit(limit).all()
 
 # --- Vehicle ---
 @app.post("/vehicles/", response_model=schemas.Vehicle)
-def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     db_vehicle = models.Vehicle(**vehicle.model_dump())
     db.add(db_vehicle)
     db.commit()
@@ -53,12 +59,12 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     return db_vehicle
 
 @app.get("/vehicles/", response_model=List[schemas.Vehicle])
-def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     return db.query(models.Vehicle).offset(skip).limit(limit).all()
 
 # --- Product (จำเป็นต้องมีเพื่อเอาไปใส่ใน Bill Item) ---
 @app.post("/products/", response_model=schemas.Product)
-def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
+def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     db_product = models.Product(**product.model_dump())
     db.add(db_product)
     db.commit()
@@ -74,7 +80,7 @@ def read_products(db: Session = Depends(get_db)):
 # ==========================================
 
 @app.post("/delivery-bills/", response_model=schemas.DeliveryBill)
-def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db)):
+def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
         # 1. สร้างตัวบิลหลัก
     # ใช้ exclude={'items'} เพราะเราจะแยกสร้าง item ต่างหาก
     bill_data = bill.model_dump(exclude={'items'})
@@ -100,20 +106,20 @@ def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends
     return db_bill
 
 @app.get("/delivery-bills/", response_model=List[schemas.DeliveryBill])
-def read_delivery_bills(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_delivery_bills(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
     # ดึงข้อมูลทั้งหมด (Employee เห็นทุกบิลตามที่ขอ)
     bills = db.query(models.DeliveryBill).offset(skip).limit(limit).all()
     return bills
 
 @app.get("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def read_delivery_bill_by_id(bill_id: str, db: Session = Depends(get_db)):
+def read_delivery_bill_by_id(bill_id: str, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
     bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
     if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     return bill
 
 @app.put("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, db: Session = Depends(get_db)):
+def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
     # 1. หาบิลก่อน
     db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
     if not db_bill:
@@ -134,7 +140,7 @@ def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, 
 # ==========================================
 
 @app.post("/time-logs/", response_model=schemas.DeliveryTimeLog)
-def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(get_db)):
+def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
     """
     Employee คนไหนก็สามารถยิง API นี้เพื่อลงเวลาให้บิลไหนก็ได้
     """
@@ -159,7 +165,7 @@ def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(
     return new_log
 
 @app.delete("/debug/clear-all")
-def clear_database(db: Session = Depends(get_db)):
+def clear_database(db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
     try:
         db.query(models.DeliveryTimeLog).delete()
         db.query(models.BillItem).delete()
@@ -173,8 +179,17 @@ def clear_database(db: Session = Depends(get_db)):
         db.rollback()
 
 
+#      _____     ____    _        ______ 
+#     |  __ \   / __ \  | |      |  ____|
+#     | |__) | | |  | | | |      | |__   
+#     |  _  /  | |  | | | |      |  __|  
+#     | | \ \  | |__| | | |____  | |____ 
+#     |_|  \_\  \____/  |______| |______|
+#                                        
+#                                        
+
 @app.post("/roles/", response_model=schemas.Role)
-def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
+def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
     # เช็คว่ามี ID นี้หรือยัง
     db_role = db.query(models.Role).filter(models.Role.role_id == role.role_id).first()
     if db_role:
@@ -192,16 +207,21 @@ def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
     return new_role
 
 @app.get("/roles/", response_model=list[schemas.Role])
-def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
     roles = db.query(models.Role).offset(skip).limit(limit).all()
     return roles
 
-# ==========================================
-#  USER 
-# ==========================================
+#      _    _    _____   ______   _____  
+#     | |  | |  / ____| |  ____| |  __ \ 
+#     | |  | | | (___   | |__    | |__) |
+#     | |  | |  \___ \  |  __|   |  _  / 
+#     | |__| |  ____) | | |____  | | \ \ 
+#      \____/  |_____/  |______| |_|  \_\
+#                                        
+#                                        
 
 @app.post("/users/", response_model=schemas.User)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
     db_user = db.query(models.User).filter(models.User.User_id == user.User_id).first()
     if db_user:
         raise HTTPException(status_code=400, detail="User ID already exists")
@@ -229,6 +249,32 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @app.get("/users/", response_model=list[schemas.User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
+
+#      _         ____     _____   _____   _   _ 
+#     | |       / __ \   / ____| |_   _| | \ | |
+#     | |      | |  | | | |  __    | |   |  \| |
+#     | |      | |  | | | | |_ |   | |   | . ` |
+#     | |____  | |__| | | |__| |  _| |_  | |\  |
+#     |______|  \____/   \_____| |_____| |_| \_|
+#                                               
+#                           
+
+
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # 1. ค้นหา User จากชื่อที่ส่งมา
+    user = db.query(models.User).filter(models.User.Username == form_data.username).first()
+    
+    # 2. ตรวจสอบว่ามี User ไหม และ Password ตรงกันไหม
+    if not user or user.Password_hash != form_data.password: # สมมติว่าเช็คตรงๆ
+        raise HTTPException(status_code=400, detail="Username หรือ Password ไม่ถูกต้อง")
+
+    # 3. สร้าง Token (ในขั้นตอนนี้เอาแบบง่ายๆ คือส่ง username กลับไปเป็น token ก่อน)
+    # แต่ในระดับ Master เราจะใช้ JWT (Json Web Token)
+    return {
+        "access_token": user.Username, 
+        "token_type": "bearer"
+    }
