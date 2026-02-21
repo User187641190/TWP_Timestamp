@@ -1,5 +1,7 @@
 import enum
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date , Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date , Enum , Identity as SQLAlchemyEnum
+from sqlalchemy import Identity 
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -7,7 +9,7 @@ import datetime
 ###  Enum
 class EmployeeStatus(str, enum.Enum):
     ACTIVE = "Active"       #ทำงาน
-    ON_LEAVE = "On Leave"   #ลาออก
+    ON_LEAVE = "On Leave"   #ลา
     HOLIDAY = "Holiday"   #หยุด
 
 class VehicleStatus(str, enum.Enum):
@@ -22,15 +24,17 @@ class DeliveryBillStatus(str, enum.Enum):
     Cancel = "Cancel"       
 
 
-
 ##NormalAttibute
 class Employee(Base):
     __tablename__ = "Employee"
-
-    Employee_id = Column(Integer, primary_key=True , autoincrement=True)
+    Employee_id = Column(Integer , Identity(start=1),primary_key=True  )
     Employee_name = Column(String(128))
     Phone = Column(String(10))
-    Status = Column(SQLAlchemyEnum(EmployeeStatus), default=EmployeeStatus.HOLIDAY, nullable=False)
+    Status = Column(
+        SQLAlchemyEnum(EmployeeStatus, name="chk_emp_status"), 
+        default=EmployeeStatus.HOLIDAY, 
+        nullable=False
+    )
     deliveries = relationship("DeliveryBill", back_populates="employee")
     users = relationship("User", back_populates="employee") # แก้ชื่อ back_populates ให้ตรงกันด้วยนะครับ (ถ้ามี)
 

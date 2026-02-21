@@ -35,16 +35,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# 1. Management APIs (Employee / Vehicle / Product)
-# ==========================================
-
 
 @app.get("/")
 def Nothing():
     return ('Nothing , everything is nothing')
 
-# --- Employee ---
+
+
+#        _  _     _  _         _____     ____     _____   _______ 
+#      _| || |_ _| || |_      |  __ \   / __ \   / ____| |__   __|
+#     |_  __  _|_  __  _|     | |__) | | |  | | | (___      | |   
+#      _| || |_ _| || |_      |  ___/  | |  | |  \___ \     | |   
+#     |_  __  _|_  __  _|     | |      | |__| |  ____) |    | |   
+#       |_||_|   |_||_|       |_|       \____/  |_____/     |_|   
+#                                                                 
+#                                                                 
 @app.post("/employees/", response_model=schemas.Employee)
 def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
     db_employee = models.Employee(**employee.model_dump()) 
@@ -58,11 +63,6 @@ def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
     return db_employee
 
-@app.get("/employees/", response_model=List[schemas.Employee])
-def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
-    return db.query(models.Employee).offset(skip).limit(limit).all()
-
-# --- Vehicle ---
 @app.post("/vehicles/", response_model=schemas.Vehicle)
 def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     db_vehicle = models.Vehicle(**vehicle.model_dump())
@@ -71,11 +71,7 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     db.refresh(db_vehicle)
     return db_vehicle
 
-@app.get("/vehicles/", response_model=List[schemas.Vehicle])
-def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
-    return db.query(models.Vehicle).offset(skip).limit(limit).all()
 
-# --- Product (จำเป็นต้องมีเพื่อเอาไปใส่ใน Bill Item) ---
 @app.post("/products/", response_model=schemas.Product)
 def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
     db_product = models.Product(**product.model_dump())
@@ -84,13 +80,6 @@ def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)
     db.refresh(db_product)
     return db_product
 
-@app.get("/products/", response_model=List[schemas.Product])
-def read_products(db: Session = Depends(get_db)):
-    return db.query(models.Product).all()
-
-# ==========================================
-# 2. Delivery Bill APIs (พระเอกของเรา)
-# ==========================================
 
 @app.post("/delivery-bills/", response_model=schemas.DeliveryBill)
 def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
@@ -118,39 +107,6 @@ def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends
     db.refresh(db_bill)
     return db_bill
 
-@app.get("/delivery-bills/", response_model=List[schemas.DeliveryBill])
-def read_delivery_bills(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
-    # ดึงข้อมูลทั้งหมด (Employee เห็นทุกบิลตามที่ขอ)
-    bills = db.query(models.DeliveryBill).offset(skip).limit(limit).all()
-    return bills
-
-@app.get("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def read_delivery_bill_by_id(bill_id: str, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
-    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
-    if bill is None:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    return bill
-
-@app.put("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
-    # 1. หาบิลก่อน
-    db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
-    if not db_bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    # 2. อัปเดตข้อมูลเฉพาะ field ที่ส่งมา (ไม่เป็น None)
-    update_data = bill_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_bill, key, value)
-
-    db.add(db_bill)
-    db.commit()
-    db.refresh(db_bill)
-    return db_bill
-
-# ==========================================
-# 3. Time Log & Actions
-# ==========================================
 
 @app.post("/time-logs/", response_model=schemas.DeliveryTimeLog)
 def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
@@ -177,29 +133,6 @@ def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(
     
     return new_log
 
-@app.delete("/debug/clear-all")
-def clear_database(db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
-    try:
-        db.query(models.DeliveryTimeLog).delete()
-        db.query(models.BillItem).delete()
-        db.query(models.DeliveryBill).delete()
-        # ลบ Master data ทีหลังถ้าจำเป็น
-        # db.query(models.Employee).delete()
-        # db.query(models.Vehicle).delete()
-        db.commit()
-        return {"message": "All transaction data cleared"}
-    except Exception as e:
-        db.rollback()
-
-
-#      _____     ____    _        ______ 
-#     |  __ \   / __ \  | |      |  ____|
-#     | |__) | | |  | | | |      | |__   
-#     |  _  /  | |  | | | |      |  __|  
-#     | | \ \  | |__| | | |____  | |____ 
-#     |_|  \_\  \____/  |______| |______|
-#                                        
-#                                        
 
 @app.post("/roles/", response_model=schemas.Role)
 def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
@@ -219,19 +152,6 @@ def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db) , curren
     db.refresh(new_role)
     return new_role
 
-@app.get("/roles/", response_model=list[schemas.Role])
-def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
-    roles = db.query(models.Role).offset(skip).limit(limit).all()
-    return roles
-
-#      _    _    _____   ______   _____  
-#     | |  | |  / ____| |  ____| |  __ \ 
-#     | |  | | | (___   | |__    | |__) |
-#     | |  | |  \___ \  |  __|   |  _  / 
-#     | |__| |  ____) | | |____  | | \ \ 
-#      \____/  |_____/  |______| |_|  \_\
-#                                        
-#                                        
 
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
@@ -261,20 +181,6 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     db.refresh(new_user)
     return new_user
 
-@app.get("/users/", response_model=list[schemas.User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    return users
-
-#      _         ____     _____   _____   _   _ 
-#     | |       / __ \   / ____| |_   _| | \ | |
-#     | |      | |  | | | |  __    | |   |  \| |
-#     | |      | |  | | | | |_ |   | |   | . ` |
-#     | |____  | |__| | | |__| |  _| |_  | |\  |
-#     |______|  \____/   \_____| |_____| |_| \_|
-#                                               
-#                           
-
 
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -291,3 +197,110 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "access_token": user.Username, 
         "token_type": "bearer"
     }
+
+#        _  _     _  _          _____   ______   _______ 
+#      _| || |_ _| || |_       / ____| |  ____| |__   __|
+#     |_  __  _|_  __  _|     | |  __  | |__       | |   
+#      _| || |_ _| || |_      | | |_ | |  __|      | |   
+#     |_  __  _|_  __  _|     | |__| | | |____     | |   
+#       |_||_|   |_||_|        \_____| |______|    |_|   
+#                                                        
+#                                                        
+
+@app.get("/employees/", response_model=List[schemas.Employee])
+def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
+    return db.query(models.Employee).offset(skip).limit(limit).all()
+
+
+@app.get("/vehicles/", response_model=List[schemas.Vehicle])
+def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
+    return db.query(models.Vehicle).offset(skip).limit(limit).all()
+
+
+@app.get("/products/", response_model=List[schemas.Product])
+def read_products(db: Session = Depends(get_db)):
+    return db.query(models.Product).all()
+
+
+@app.get("/delivery-bills/", response_model=List[schemas.DeliveryBill])
+def read_delivery_bills(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
+    # ดึงข้อมูลทั้งหมด (Employee เห็นทุกบิลตามที่ขอ)
+    bills = db.query(models.DeliveryBill).offset(skip).limit(limit).all()
+    return bills
+
+
+@app.get("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
+def read_delivery_bill_by_id(bill_id: str, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
+    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
+    if bill is None:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    return bill
+
+
+@app.get("/roles/", response_model=list[schemas.Role])
+def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
+    roles = db.query(models.Role).offset(skip).limit(limit).all()
+    return roles
+
+
+@app.get("/users/", response_model=list[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
+    users = db.query(models.User).offset(skip).limit(limit).all()
+    return users
+
+
+#        _  _     _  _         _____    _    _   _______ 
+#      _| || |_ _| || |_      |  __ \  | |  | | |__   __|
+#     |_  __  _|_  __  _|     | |__) | | |  | |    | |   
+#      _| || |_ _| || |_      |  ___/  | |  | |    | |   
+#     |_  __  _|_  __  _|     | |      | |__| |    | |   
+#       |_||_|   |_||_|       |_|       \____/     |_|   
+#                                                        
+#                                                        
+
+
+@app.put("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
+def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
+    # 1. หาบิลก่อน
+    db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
+    if not db_bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    # 2. อัปเดตข้อมูลเฉพาะ field ที่ส่งมา (ไม่เป็น None)
+    update_data = bill_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_bill, key, value)
+
+    db.add(db_bill)
+    db.commit()
+    db.refresh(db_bill)
+    return db_bill
+
+
+
+#        _  _     _  _         _____    ______   _        ______   _______   ______ 
+#      _| || |_ _| || |_      |  __ \  |  ____| | |      |  ____| |__   __| |  ____|
+#     |_  __  _|_  __  _|     | |  | | | |__    | |      | |__       | |    | |__   
+#      _| || |_ _| || |_      | |  | | |  __|   | |      |  __|      | |    |  __|  
+#     |_  __  _|_  __  _|     | |__| | | |____  | |____  | |____     | |    | |____ 
+#       |_||_|   |_||_|       |_____/  |______| |______| |______|    |_|    |______|
+#                                                                                   
+#                                                                                   
+
+
+@app.delete("/debug/clear-all")
+def clear_database(db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
+    try:
+        db.query(models.DeliveryTimeLog).delete()
+        db.query(models.BillItem).delete()
+        db.query(models.DeliveryBill).delete()
+        # ลบ Master data ทีหลังถ้าจำเป็น
+        # db.query(models.Employee).delete()
+        # db.query(models.Vehicle).delete()
+        db.commit()
+        return {"message": "All transaction data cleared"}
+    except Exception as e:
+        db.rollback()
+
+
+
