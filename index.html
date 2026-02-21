@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TWP Timestamp Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div id="loginSection" class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-md w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">เข้าสู่ระบบ</h2>
+            <div class="space-y-4">
+                <input type="text" id="username" placeholder="Username" class="w-full p-2 border rounded">
+                <input type="password" id="password" placeholder="Password" class="w-full p-2 border rounded">
+                <button onclick="handleLogin()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
+            </div>
+            <p id="loginError" class="text-red-500 mt-4 text-sm hidden">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</p>
+        </div>
+    </div>
+
+    <div id="dashboardSection" class="hidden container mx-auto p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">จัดการผู้ใช้งาน (User)</h1>
+            <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h3 class="text-xl font-semibold mb-4">เพิ่มผู้ใช้งานใหม่</h3>
+            <form id="userForm" class="grid grid-cols-2 gap-4">
+                <input type="number" id="userId" placeholder="User ID (รหัสตัวเลข)" class="p-2 border rounded" required>
+                <input type="text" id="newUsername" placeholder="ชื่อผู้ใช้" class="p-2 border rounded" required>
+                <input type="password" id="newPassword" placeholder="รหัสผ่าน" class="p-2 border rounded" required>
+                <input type="number" id="empId" placeholder="Employee ID" class="p-2 border rounded" required>
+                <select id="roleId" class="p-2 border rounded">
+                    <option value="1">Admin</option>
+                    <option value="2">Employee</option>
+                    <option value="3">CEO</option>
+                </select>
+                <button type="submit" class="bg-green-600 text-white p-2 rounded hover:bg-green-700">บันทึกข้อมูล</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let authToken = "";
+
+        // 1. ฟังก์ชัน Login
+        async function handleLogin() {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+
+            // ในระบบจริงต้องยิงไปที่ /login แต่เพื่อทดสอบ API คุณตอนนี้ 
+            // เราจะสมมติว่าถ้ากรอกถูกจะเก็บ "token" ไว้ในเครื่อง
+            if (user && pass) {
+                authToken = btoa(user + ":" + pass); // จำลอง Token แบบง่าย
+                localStorage.setItem("token", authToken);
+                showDashboard();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        // 2. ฟังก์ชันแสดงหน้า Dashboard
+        function showDashboard() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+        }
+
+        // 3. ฟังก์ชันส่งข้อมูล User (POST /users/)
+        document.getElementById('userForm').onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const userData = {
+                User_id: parseInt(document.getElementById('userId').value),
+                Username: document.getElementById('newUsername').value,
+                Password_hash: document.getElementById('newPassword').value,
+                status: "Active",
+                Employee_id: parseInt(document.getElementById('empId').value),
+                Role_role_id: parseInt(document.getElementById('roleId').value)
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/users/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` // ส่ง Token ไปด้วย
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                if (response.ok) {
+                    alert("บันทึก User สำเร็จ!");
+                    document.getElementById('userForm').reset();
+                } else {
+                    const err = await response.json();
+                    alert("Error: " + (err.detail || "บันทึกไม่สำเร็จ"));
+                }
+            } catch (error) {
+                alert("ไม่สามารถเชื่อมต่อ API ได้ (ตรวจสอบว่ารัน FastAPI อยู่)");
+            }
+        };
+
+        function logout() {
+            localStorage.clear();
+            location.reload();
+        }
+    </script>
+</body>
+</html>

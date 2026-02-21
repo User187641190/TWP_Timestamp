@@ -27,7 +27,7 @@ class DeliveryBillStatus(str, enum.Enum):
 class Employee(Base):
     __tablename__ = "Employee"
 
-    Employee_id = Column(Integer, primary_key=True)
+    Employee_id = Column(Integer, primary_key=True , autoincrement=True)
     Employee_name = Column(String(128))
     Phone = Column(String(10))
     Status = Column(SQLAlchemyEnum(EmployeeStatus), default=EmployeeStatus.HOLIDAY, nullable=False)
@@ -126,7 +126,7 @@ class RolePermissions(Base):
 class User(Base):
     __tablename__ = "User" # User เป็นคำสงวนในบาง DB ต้องระวัง
 
-    User_id = Column(Integer, primary_key=True)
+    User_id = Column(Integer, primary_key=True , autoincrement=True)
     Username = Column(String(50))
     Password_hash = Column(String(50)) # แนะนำให้ขยายเป็น 255 ในอนาคตถ้าใช้ Hash จริงๆ
     status = Column(String(200))

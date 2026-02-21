@@ -4,6 +4,7 @@ from typing import List
 import uuid
 from datetime import datetime
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 # เพิ่มไว้ใน main.py
 
 
@@ -27,6 +28,13 @@ def get_db():
     finally:
         db.close()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # ในโปรดักชั่นควรระบุ Domain จริง
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ==========================================
 # 1. Management APIs (Employee / Vehicle / Product)
 # ==========================================
@@ -38,11 +46,16 @@ def Nothing():
 
 # --- Employee ---
 @app.post("/employees/", response_model=schemas.Employee)
-def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
-    db_employee = models.Employee(**employee.model_dump())
+def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
+    db_employee = models.Employee(**employee.model_dump()) 
     db.add(db_employee)
-    db.commit()
-    db.refresh(db_employee)
+    try:
+        db.commit()
+        db.refresh(db_employee)
+    except Exception as e:
+        db.rollback()
+        print(f"Error: {e}") # ดู Error จริงใน Terminal
+        raise HTTPException(status_code=500, detail=str(e))
     return db_employee
 
 @app.get("/employees/", response_model=List[schemas.Employee])

@@ -17,10 +17,11 @@ class UserBase(BaseModel):
     status: str | None = "Active" 
 
 class UserCreate(UserBase):
+    Username: str
     Password_hash: str
-    # รับค่า ID แบบสั้นๆ เข้ามา
+    status: str | None = "Active" 
     Employee_id: int 
-    Role_role_id: int 
+    Role_role_id: int
 
 class User(UserBase):
     # เวลาส่งข้อมูลกลับ ไม่ควรส่ง Password_hash กลับไป (เพื่อความปลอดภัย)
@@ -84,13 +85,13 @@ class EmployeeBase(BaseModel):
     Phone: Optional[str] = None
     Status: EmployeeStatus = EmployeeStatus.ACTIVE
 
-class EmployeeCreate(EmployeeBase):
-    Employee_id: int # ระบุ ID เองตอนสร้าง
+class EmployeeCreate(BaseModel):
+    Employee_name: str
+    Phone: Optional[str] = None
+    Status: EmployeeStatus = EmployeeStatus.ACTIVE
 
 class Employee(EmployeeBase):
     Employee_id: int
-    # ถ้าอยากให้ Employee โชว์รายการบิลของตัวเองด้วย ให้ uncomment บรรทัดล่าง
-    # deliveries: List['DeliveryBillBase'] = [] 
     class Config:
         from_attributes = True
 #——————————————————————————            
