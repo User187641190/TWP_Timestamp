@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from jose import jwt
+
 # เพิ่มไว้ใน main.py
 
 
@@ -14,6 +16,9 @@ from models import User
 import schemas
 from database import SessionLocal, engine
 from deps import get_current_user, check_ceo_role , check_employee_role , check_admin_role
+import deps 
+from schemas import UserShow
+from deps import SECRET_KEY, ALGORITHM
 
 # สร้าง Tables ใน Database (ถ้ารันครั้งแรก)
 models.Base.metadata.create_all(bind=engine)
@@ -30,11 +35,11 @@ def get_db():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # ในโปรดักชั่นควรระบุ Domain จริง
+    allow_origins=["*"],  # หรือระบุเป็น ["http://127.0.0.1:5500"]
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/")
 def Nothing():
@@ -182,20 +187,33 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     return new_user
 
 
+# main.py
+
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 1. ค้นหา User จากชื่อที่ส่งมา
+    # 1. เช็ค User / Password
+    # หมายเหตุ: ในระบบจริงควรเช็ค Password Hash แต่ตอนนี้เช็คแบบดิบๆ ไปก่อน
     user = db.query(models.User).filter(models.User.Username == form_data.username).first()
-    
-    # 2. ตรวจสอบว่ามี User ไหม และ Password ตรงกันไหม
-    if not user or user.Password_hash != form_data.password: # สมมติว่าเช็คตรงๆ
-        raise HTTPException(status_code=400, detail="Username หรือ Password ไม่ถูกต้อง")
 
-    # 3. สร้าง Token (ในขั้นตอนนี้เอาแบบง่ายๆ คือส่ง username กลับไปเป็น token ก่อน)
-    # แต่ในระดับ Master เราจะใช้ JWT (Json Web Token)
+    if not user: # ถ้าไม่เจอ User
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    # (ถ้ามีเช็ค password ให้ใส่ตรงนี้)
+    # if user.Password != form_data.password: ...
+
+    # 2. สร้าง JWT Token (นี่คือส่วนสำคัญที่หายไป!)
+    data_to_encode = {
+        "sub": user.Username,  # sub คือ Subject (เจ้าของ Token)
+        "role": str(user.Role_role_id) # ใส่ Role ไปด้วยก็ได้
+    }
+    # สร้าง Token โดยใช้กุญแจเดียวกับใน deps.py
+    encoded_jwt = jwt.encode(data_to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+    # 3. ส่ง Token กลับไปให้ Frontend
     return {
-        "access_token": user.Username, 
-        "token_type": "bearer"
+        "access_token": encoded_jwt, 
+        "token_type": "bearer",
+        "role": str(user.Role_role_id) # ส่ง Role แยกไปให้ใช้ง่ายๆ
     }
 
 #        _  _     _  _          _____   ______   _______ 
@@ -248,7 +266,26 @@ def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , 
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
 
+@app.get("/users/me")  # ลบ response_model=UserShow ออกชั่วคราว เพื่อความยืดหยุ่น
+async def read_users_me(current_user: models.User = Depends(get_current_user)):
+    # 1. แปลง Role ID เป็นชื่อ (Mapping)
+    # เช็คตาม Database ของคุณว่าเลขไหนคือตำแหน่งอะไร
+    role_name = "User"
+    if current_user.Role_role_id == 1:
+        role_name = "Admin"   # ต้องตรงกับที่ JS เช็ค (ตัวเล็ก/ใหญ่สำคัญ)
+    elif current_user.Role_role_id == 2:
+        role_name = "Staff"   # หรือ Employee
+    elif current_user.Role_role_id == 3:
+        role_name = "Driver"
 
+    # 2. ส่ง JSON กลับไปแบบ Manual (เพื่อให้ได้ field "role" ที่หน้าเว็บต้องการ)
+    return {
+        "User_id": current_user.User_id,
+        "username": current_user.Username,
+        "role": role_name,           # <--- นี่คือตัวที่หน้าเว็บรออยู่!
+        "role_id": current_user.Role_role_id,
+        "status": current_user.status
+    }
 #        _  _     _  _         _____    _    _   _______ 
 #      _| || |_ _| || |_      |  __ \  | |  | | |__   __|
 #     |_  __  _|_  __  _|     | |__) | | |  | |    | |   

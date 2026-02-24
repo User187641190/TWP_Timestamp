@@ -30,6 +30,16 @@ class User(UserBase):
     
     class Config:
         from_attributes = True
+
+class UserShow(UserBase):
+    # เวลาส่งข้อมูลกลับ ไม่ควรส่ง Password_hash กลับไป (เพื่อความปลอดภัย)
+    Employee_Employee_id: int
+    Role_role_id: int
+    
+    class Config:
+        from_attributes = True
+
+
 #——————————————————————————            
 # --- Product (สินค้า) ---
 #——————————————————————————        

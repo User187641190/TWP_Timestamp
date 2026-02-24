@@ -3,111 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TWP Timestamp Management</title>
+    <title>Warehouse Management System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body>
 
     <div id="loginSection" class="min-h-screen flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-md w-96">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96">
             <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">เข้าสู่ระบบ</h2>
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="Username" class="w-full p-2 border rounded">
-                <input type="password" id="password" placeholder="Password" class="w-full p-2 border rounded">
-                <button onclick="handleLogin()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
-            </div>
-            <p id="loginError" class="text-red-500 mt-4 text-sm hidden">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</p>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input type="text" id="username" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input type="password" id="password" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition">Login</button>
+            </form>
+            <p id="loginError" class="text-red-500 text-sm mt-4 text-center hidden"></p>
         </div>
     </div>
 
-    <div id="dashboardSection" class="hidden container mx-auto p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">จัดการผู้ใช้งาน (User)</h1>
-            <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
-        </div>
+    <div id="dashboardSection" class="hidden min-h-screen flex">
+        
+        <aside class="w-64 bg-slate-800 text-white flex flex-col transition-all duration-300">
+            <div class="p-6 text-2xl font-bold bg-slate-900 text-center">
+                WMS System
+            </div>
+            
+            <div class="p-4 border-b border-slate-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-bold" id="userAvatar">U</div>
+                <div>
+                    <p id="displayUsername" class="font-semibold text-sm">Loading...</p>
+                    <p id="displayRole" class="text-xs text-slate-400">...</p>
+                </div>
+            </div>
 
-        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h3 class="text-xl font-semibold mb-4">เพิ่มผู้ใช้งานใหม่</h3>
-            <form id="userForm" class="grid grid-cols-2 gap-4">
-                <input type="number" id="userId" placeholder="User ID (รหัสตัวเลข)" class="p-2 border rounded" required>
-                <input type="text" id="newUsername" placeholder="ชื่อผู้ใช้" class="p-2 border rounded" required>
-                <input type="password" id="newPassword" placeholder="รหัสผ่าน" class="p-2 border rounded" required>
-                <input type="number" id="empId" placeholder="Employee ID" class="p-2 border rounded" required>
-                <select id="roleId" class="p-2 border rounded">
-                    <option value="1">Admin</option>
-                    <option value="2">Employee</option>
-                    <option value="3">CEO</option>
-                </select>
-                <button type="submit" class="bg-green-600 text-white p-2 rounded hover:bg-green-700">บันทึกข้อมูล</button>
-            </form>
-        </div>
+            <nav id="sidebarMenu" class="flex-1 p-4 space-y-2">
+                </nav>
+
+            <button onclick="logout()" class="p-4 bg-red-600 hover:bg-red-700 text-center">
+                <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+            </button>
+        </aside>
+
+        <main class="flex-1 p-8">
+            <h1 id="pageTitle" class="text-3xl font-bold text-gray-800 mb-6">ยินดีต้อนรับ</h1>
+            <div id="contentArea" class="bg-white p-6 rounded shadow min-h-[400px]">
+                <p class="text-gray-500">เลือกเมนูจากด้านซ้ายเพื่อเริ่มทำงาน</p>
+            </div>
+        </main>
     </div>
 
     <script>
-        const API_URL = "http://127.0.0.1:8000";
-        let authToken = "";
+    const API_URL = "http://127.0.0.1:8000"; // เช็ค Port ให้ตรงกับ Backend
 
-        // 1. ฟังก์ชัน Login
-        async function handleLogin() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
+    // ฟังก์ชัน Login
+    async function handleLogin(event) {
+        event.preventDefault();
+        const username = document.getElementById('username').value;
+        // const password = ... (ถ้ามี)
 
-            // ในระบบจริงต้องยิงไปที่ /login แต่เพื่อทดสอบ API คุณตอนนี้ 
-            // เราจะสมมติว่าถ้ากรอกถูกจะเก็บ "token" ไว้ในเครื่อง
-            if (user && pass) {
-                authToken = btoa(user + ":" + pass); // จำลอง Token แบบง่าย
-                localStorage.setItem("token", authToken);
-                showDashboard();
-            } else {
-                document.getElementById('loginError').classList.remove('hidden');
+        try {
+            console.log("กำลังส่งข้อมูล Login...");
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    'username': username,
+                    'password': 'password_placeholder' // ใส่ให้ครบตามฟอร์ม
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Login failed');
             }
-        }
 
-        // 2. ฟังก์ชันแสดงหน้า Dashboard
-        function showDashboard() {
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('dashboardSection').classList.remove('hidden');
-        }
-
-        // 3. ฟังก์ชันส่งข้อมูล User (POST /users/)
-        document.getElementById('userForm').onsubmit = async (e) => {
-            e.preventDefault();
+            const data = await response.json();
+            console.log("Login สำเร็จ! Token:", data);
             
-            const userData = {
-                User_id: parseInt(document.getElementById('userId').value),
-                Username: document.getElementById('newUsername').value,
-                Password_hash: document.getElementById('newPassword').value,
-                status: "Active",
-                Employee_id: parseInt(document.getElementById('empId').value),
-                Role_role_id: parseInt(document.getElementById('roleId').value)
-            };
+            // บันทึก Token
+            localStorage.setItem('token', data.access_token);
+            
+            // โหลดหน้าเว็บใหม่เพื่อเข้าสู่ระบบ
+            window.location.reload();
 
-            try {
-                const response = await fetch(`${API_URL}/users/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}` // ส่ง Token ไปด้วย
-                    },
-                    body: JSON.stringify(userData)
-                });
-
-                if (response.ok) {
-                    alert("บันทึก User สำเร็จ!");
-                    document.getElementById('userForm').reset();
-                } else {
-                    const err = await response.json();
-                    alert("Error: " + (err.detail || "บันทึกไม่สำเร็จ"));
-                }
-            } catch (error) {
-                alert("ไม่สามารถเชื่อมต่อ API ได้ (ตรวจสอบว่ารัน FastAPI อยู่)");
-            }
-        };
-
-        function logout() {
-            localStorage.clear();
-            location.reload();
+        } catch (error) {
+            console.error("Login Error:", error);
+            alert('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
         }
-    </script>
+    }
+
+    // ฟังก์ชันเช็ค User (ทำงานตอนโหลดหน้าเว็บ)
+    async function checkLogin() {
+        const token = localStorage.getItem('token');
+        if (!token) return; // ถ้าไม่มี Token ก็จบ (อยู่หน้า Login)
+
+        try {
+            console.log("กำลังดึงข้อมูล User...");
+            const response = await fetch(`${API_URL}/users/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                // ถ้า Token หมดอายุหรือ Error ให้เด้งออก
+                console.warn("Token ใช้ไม่ได้ หรือหมดอายุ");
+                logout();
+                return;
+            }
+
+            const user = await response.json();
+            console.log("ได้ข้อมูล User มาแล้ว:", user); // <--- ดูตรงนี้ใน Console!!
+
+            // --- ส่วนสำคัญ: ซ่อนหน้า Login / เปิดหน้า Dashboard ---
+            document.getElementById('loginSection').classList.add('hidden'); 
+            
+            // สร้างหน้า Dashboard ชั่วคราว (ถ้า HTML ไม่มี)
+            let dashboard = document.getElementById('dashboardSection');
+            if (!dashboard) {
+                // ถ้ายังไม่ได้ทำ div dashboard ไว้ ให้สร้างหลอกๆ ขึ้นมาเทสก่อน
+                document.body.innerHTML += `
+                    <div id="dashboardSection" class="p-10">
+                        <h1 class="text-3xl font-bold">ยินดีต้อนรับคุณ ${user.username}</h1>
+                        <p class="text-xl mt-4">สถานะ: <span class="font-bold text-blue-600">${user.role}</span></p>
+                        <button onclick="logout()" class="mt-6 bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+                    </div>
+                `;
+                // ซ่อน login form อีกรอบเผื่อ body.innerHTML ทับ
+                 document.getElementById('loginSection')?.classList.add('hidden');
+            } else {
+                 dashboard.classList.remove('hidden');
+            }
+
+            // เช็ค Role (แก้ปัญหาตัวเล็ก/ใหญ่)
+            const role = (user.role || "").toLowerCase();
+            console.log("User Role (normalized):", role);
+
+            if (role === 'admin') {
+                console.log("-> โหมด Admin");
+                // เรียกฟังก์ชันโหลดข้อมูล Admin
+            } else {
+                console.log("-> โหมด User ทั่วไป");
+            }
+
+        } catch (error) {
+            console.error("Check Login Error:", error);
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.reload();
+    }
+
+    // รันเมื่อเปิดเว็บ
+    window.onload = checkLogin;
+</script>>
 </body>
 </html>
