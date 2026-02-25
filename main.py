@@ -199,7 +199,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
     # (ถ้ามีเช็ค password ให้ใส่ตรงนี้)
-    # if user.Password != form_data.password: ...
+    if user.Password_hash != form_data.password:
+        raise HTTPException(status_code=400, detail="รหัสผ่านไม่ถูกต้อง")
 
     # 2. สร้าง JWT Token (นี่คือส่วนสำคัญที่หายไป!)
     data_to_encode = {
