@@ -9,7 +9,8 @@ from jose import jwt
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
-
+from passlib.context import CryptContext 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # เพิ่มไว้ใน main.py
 
 
