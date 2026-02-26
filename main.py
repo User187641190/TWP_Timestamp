@@ -6,6 +6,9 @@ from datetime import datetime
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
 
 # เพิ่มไว้ใน main.py
 
@@ -19,6 +22,40 @@ from deps import get_current_user, check_ceo_role , check_employee_role , check_
 import deps 
 from schemas import UserShow
 from deps import SECRET_KEY, ALGORITHM
+
+
+
+def reset_daily_employee_status():
+    """
+    ฟังก์ชันนี้จะทำงานทุก 7.00 น.
+    เพื่อรีเซ็ตสถานะพนักงานทุกคน (เช่น ให้กลับมาเป็น Active เพื่อรอเช็คชื่อใหม่)
+    """
+    print(f"⏰ [7:00 AM] เริ่มทำการรีเซ็ตสถานะพนักงาน... ({datetime.now()})")
+    
+    # ต้องสร้าง DB Session เองเพราะไม่ได้ผ่าน API Request
+    db = SessionLocal() 
+    try:
+        # ดึงพนักงานทุกคนมา
+        employees = db.query(models.Employee).all()
+        for emp in employees:
+            # ตัวอย่าง: รีเซ็ตสถานะเป็น "Active" (หรือสถานะอื่นตามต้องการ เช่น "Wait Check-in")
+            emp.Status = models.EmployeeStatus.ACTIVE 
+            
+        db.commit()
+        print("✅ รีเซ็ตสถานะพนักงานเรียบร้อยแล้ว")
+    except Exception as e:
+        print(f"❌ เกิดข้อผิดพลาดในการรีเซ็ต: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+# --- ตั้งค่า Scheduler (วางไว้ก่อน app = FastAPI...) ---
+scheduler = BackgroundScheduler()
+# ตั้งเวลา 7:00 น. ทุกวัน (timezone Bangkok/Asia)
+trigger = CronTrigger(hour=7, minute=0, timezone=pytz.timezone('Asia/Bangkok'))
+scheduler.add_job(reset_daily_employee_status, trigger)
+scheduler.start()
+
 
 # สร้าง Tables ใน Database (ถ้ารันครั้งแรก)
 models.Base.metadata.create_all(bind=engine)
@@ -55,26 +92,28 @@ def Nothing():
 #       |_||_|   |_||_|       |_|       \____/  |_____/     |_|   
 #                                                                 
 #                                                                 
-@app.post("/employees/", response_model=schemas.Employee)
-def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    db_employee = models.Employee(**employee.model_dump()) 
-    db.add(db_employee)
-    try:
-        db.commit()
-        db.refresh(db_employee)
-    except Exception as e:
-        db.rollback()
-        print(f"Error: {e}") # ดู Error จริงใน Terminal
-        raise HTTPException(status_code=500, detail=str(e))
-    return db_employee
-
-@app.post("/vehicles/", response_model=schemas.Vehicle)
-def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
-    db_vehicle = models.Vehicle(**vehicle.model_dump())
-    db.add(db_vehicle)
+@app.post("/employees", response_model=schemas.Employee)
+def create_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
+    new_emp = models.Employee(
+        Employee_name=emp.Employee_name,
+        Phone=emp.Phone,
+        Status=emp.Status
+    )
+    db.add(new_emp)
     db.commit()
-    db.refresh(db_vehicle)
-    return db_vehicle
+    db.refresh(new_emp)
+    return new_emp
+
+@app.post("/vehicles", response_model=schemas.Vehicle)
+def create_vehicle(veh: schemas.VehicleCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
+    new_veh = models.Vehicle(
+        License_plate=veh.License_plate,
+        Status=veh.Status
+    )
+    db.add(new_veh)
+    db.commit()
+    db.refresh(new_veh)
+    return new_veh
 
 
 @app.post("/products/", response_model=schemas.Product)
@@ -85,6 +124,21 @@ def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)
     db.refresh(db_product)
     return db_product
 
+
+@app.put("/delivery-bills/{bill_id}/status")
+def update_bill_status(bill_id: int, status_update: schemas.DeliveryBillUpdateStatus, db: Session = Depends(get_db), current_user = Depends(check_employee_role)):
+    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.Bill_id == bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    bill.status = status_update.status
+    # ถ้าส่งเสร็จ ให้ลงเวลาจบ
+    if status_update.status == models.DeliveryBillStatus.DELIVERED:
+        bill.finish_time = datetime.now()
+        
+    db.commit()
+    db.refresh(bill)
+    return bill
 
 @app.post("/delivery-bills/", response_model=schemas.DeliveryBill)
 def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
@@ -227,12 +281,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 #                                                        
 
 @app.get("/employees/", response_model=List[schemas.Employee])
-def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
+def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(get_current_user)):
     return db.query(models.Employee).offset(skip).limit(limit).all()
 
 
 @app.get("/vehicles/", response_model=List[schemas.Vehicle])
-def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(check_ceo_role)):
+def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(get_current_user)):
     return db.query(models.Vehicle).offset(skip).limit(limit).all()
 
 
@@ -287,6 +341,28 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
         "role_id": current_user.Role_role_id,
         "status": current_user.status
     }
+
+@app.get("/dashboard/stats")
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    # นับจำนวนรถตามสถานะ
+    vehicles = db.query(models.Vehicle).all()
+    v_stats = {"Available": 0, "In Use": 0, "Maintenance": 0}
+    for v in vehicles:
+        # แปลง enum เป็น string เพื่อความชัวร์
+        status_str = str(v.Status.value) if hasattr(v.Status, 'value') else str(v.Status)
+        if status_str in v_stats:
+            v_stats[status_str] += 1
+
+    # นับจำนวนพนักงานตามสถานะ
+    employees = db.query(models.Employee).all()
+    e_stats = {"Active": 0, "On Leave": 0, "Holiday": 0}
+    for e in employees:
+        status_str = str(e.Status.value) if hasattr(e.Status, 'value') else str(e.Status)
+        if status_str in e_stats:
+            e_stats[status_str] += 1
+            
+    return {"vehicles": v_stats, "employees": e_stats}
+
 #        _  _     _  _         _____    _    _   _______ 
 #      _| || |_ _| || |_      |  __ \  | |  | | |__   __|
 #     |_  __  _|_  __  _|     | |__) | | |  | |    | |   

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+        .modal { transition: opacity 0.25s ease; }
+        body.modal-active { overflow-x: hidden; overflow-y: hidden !important; }
+        /* Table Styles */
+        th { background-color: #f8fafc; color: #475569; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+        tr:hover { background-color: #f1f5f9; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="loginSection" class="min-h-screen flex items-center justify-center bg-blue-900">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+            <h1 class="text-3xl font-bold text-center text-blue-800 mb-6">WMS Login</h1>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="username" placeholder="Username" class="w-full border p-2 mb-4 rounded" required>
+                <input type="password" id="password" placeholder="Password" class="w-full border p-2 mb-6 rounded" required>
+                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboardSection" class="hidden min-h-screen flex">
+        <aside class="w-64 bg-slate-800 text-white flex flex-col fixed h-full overflow-y-auto z-10">
+            <div class="p-6 text-2xl font-bold text-center border-b border-slate-700">WMS System</div>
+            <div class="p-4 flex-1 space-y-2">
+                
+                <button id="menu-ceo" onclick="showPage('ceo-page')" class="hidden w-full text-left p-3 hover:bg-slate-700 rounded transition">
+                    <i class="fas fa-chart-pie mr-2 text-yellow-400"></i> ภาพรวม (CEO)
+                </button>
+
+                <div id="menu-admin" class="hidden space-y-2">
+                    <p class="text-xs text-gray-400 uppercase mt-4 mb-2">Admin Management</p>
+                    <button onclick="showPage('admin-user')" class="w-full text-left p-3 hover:bg-slate-700 rounded transition"><i class="fas fa-users mr-2"></i> จัดการ Users</button>
+                    <button onclick="showPage('admin-emp')" class="w-full text-left p-3 hover:bg-slate-700 rounded transition"><i class="fas fa-id-card mr-2"></i> จัดการพนักงาน</button>
+                    <button onclick="showPage('admin-vehicle')" class="w-full text-left p-3 hover:bg-slate-700 rounded transition"><i class="fas fa-truck mr-2"></i> จัดการรถขนส่ง</button>
+                </div>
+
+                <div id="menu-employee" class="hidden space-y-2">
+                    <p class="text-xs text-gray-400 uppercase mt-4 mb-2">Operations</p>
+                    <button onclick="showPage('emp-create-bill')" class="w-full text-left p-3 hover:bg-slate-700 rounded transition"><i class="fas fa-file-invoice mr-2"></i> เปิดบิลใหม่</button>
+                    <button onclick="showPage('emp-list-bill')" class="w-full text-left p-3 hover:bg-slate-700 rounded transition"><i class="fas fa-tasks mr-2"></i> งานส่งของ</button>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-700 bg-slate-900">
+                <p id="user-display" class="text-sm mb-2 text-gray-300">Loading...</p>
+                <button onclick="logout()" class="w-full bg-red-600 hover:bg-red-700 text-white p-2 rounded text-sm">Logout</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 p-8 ml-64">
+            
+            <div id="ceo-page" class="page-content hidden">
+                <h2 class="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">CEO Dashboard</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-bold mb-4 text-center text-lg">สถานะรถขนส่ง</h3>
+                        <canvas id="vehicleChart"></canvas>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-bold mb-4 text-center text-lg">สถานะพนักงาน</h3>
+                        <canvas id="employeeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-user" class="page-content hidden">
+                <h2 class="text-2xl font-bold mb-6">จัดการผู้ใช้งาน (Users)</h2>
+                
+                <div class="bg-white p-6 rounded shadow mb-8">
+                    <h3 class="font-bold mb-4 text-lg border-b pb-2">สร้าง User ใหม่</h3>
+                    <form onsubmit="adminCreateUser(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="new_u_name" placeholder="Username" class="border p-2 rounded" required>
+                        <input type="password" id="new_u_pass" placeholder="Password" class="border p-2 rounded" required>
+                        <select id="new_u_role" class="border p-2 rounded bg-gray-50">
+                            <option value="1">Admin</option>
+                            <option value="2">Employee</option>
+                            <option value="3">CEO / Driver</option>
+                        </select>
+                        <input type="number" id="new_u_empid" placeholder="รหัสพนักงาน (Ref Employee ID)" class="border p-2 rounded" required>
+                        <div class="md:col-span-2">
+                            <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">บันทึก User</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                        <h3 class="font-bold text-gray-700">รายชื่อ User ทั้งหมด</h3>
+                        <button onclick="loadAdminData('users')" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead><tr><th class="p-4">ID</th><th class="p-4">Username</th><th class="p-4">Role ID</th><th class="p-4">Status</th></tr></thead>
+                        <tbody id="table-users" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="admin-emp" class="page-content hidden">
+                <h2 class="text-2xl font-bold mb-6">จัดการพนักงาน (Employees)</h2>
+                
+                <div class="bg-white p-6 rounded shadow mb-8">
+                    <h3 class="font-bold mb-4 text-lg border-b pb-2">ลงทะเบียนพนักงานใหม่</h3>
+                    <form onsubmit="adminCreateEmp(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="emp_name" placeholder="ชื่อ-นามสกุล" class="border p-2 rounded" required>
+                        <input type="text" id="emp_phone" placeholder="เบอร์โทรศัพท์" class="border p-2 rounded" required>
+                        <div class="md:col-span-2">
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">บันทึกพนักงาน</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                        <h3 class="font-bold text-gray-700">รายชื่อพนักงานทั้งหมด</h3>
+                        <button onclick="loadAdminData('employees')" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead><tr><th class="p-4">ID</th><th class="p-4">ชื่อ-นามสกุล</th><th class="p-4">เบอร์โทร</th><th class="p-4">Status</th></tr></thead>
+                        <tbody id="table-emps" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="admin-vehicle" class="page-content hidden">
+                <h2 class="text-2xl font-bold mb-6">จัดการรถขนส่ง (Vehicles)</h2>
+                
+                <div class="bg-white p-6 rounded shadow mb-8">
+                    <h3 class="font-bold mb-4 text-lg border-b pb-2">ลงทะเบียนรถใหม่</h3>
+                    <form onsubmit="adminCreateVehicle(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="veh_plate" placeholder="ทะเบียนรถ (เช่น 1กไ-1234)" class="border p-2 rounded" required>
+                        <select id="veh_status" class="border p-2 rounded bg-gray-50">
+                            <option value="Available">Available</option>
+                            <option value="Maintenance">Maintenance</option>
+                        </select>
+                        <div class="md:col-span-2">
+                            <button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded w-full">บันทึกรถ</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                        <h3 class="font-bold text-gray-700">รายชื่อรถทั้งหมด</h3>
+                        <button onclick="loadAdminData('vehicles')" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead><tr><th class="p-4">ID</th><th class="p-4">ทะเบียนรถ</th><th class="p-4">สถานะ</th></tr></thead>
+                        <tbody id="table-vehs" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="emp-create-bill" class="page-content hidden">
+                <h2 class="text-2xl font-bold mb-6">เปิดบิลส่งของ (New Bill)</h2>
+                <form onsubmit="createBill(event)" class="bg-white p-6 rounded shadow max-w-2xl">
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">ชื่อผู้รับ</label>
+                            <input type="text" id="bill_receiver" class="border p-2 rounded w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">เบอร์โทรศัพท์</label>
+                            <input type="text" id="bill_phone" class="border p-2 rounded w-full" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">เลือกรถขนส่ง</label>
+                            <select id="bill_vehicle" class="border p-2 rounded w-full bg-gray-50"><option>Loading...</option></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">เลือกพนักงานขับ</label>
+                            <select id="bill_employee" class="border p-2 rounded w-full bg-gray-50"><option>Loading...</option></select>
+                        </div>
+                    </div>
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full text-lg">ยืนยันการเปิดบิล</button>
+                </form>
+            </div>
+
+            <div id="emp-list-bill" class="page-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">รายการส่งของ (Shipments)</h2>
+                    <button onclick="loadBills()" class="text-blue-600 hover:text-blue-800"><i class="fas fa-sync"></i> Refresh</button>
+                </div>
+                <div class="bg-white rounded shadow overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-200 text-gray-700">
+                            <tr>
+                                <th class="p-4">ID</th>
+                                <th class="p-4">ผู้รับ</th>
+                                <th class="p-4">สถานะ</th>
+                                <th class="p-4 text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="billTableBody" class="divide-y divide-gray-100">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="statusModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center">
+        <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+        <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto">
+            <div class="modal-content py-4 text-left px-6">
+                <div class="flex justify-between items-center pb-3">
+                    <p class="text-2xl font-bold">อัปเดตสถานะ</p>
+                    <div class="modal-close cursor-pointer z-50" onclick="closeModal()">
+                        <i class="fas fa-times"></i>
+                    </div>
+                </div>
+                <div class="my-5">
+                    <input type="hidden" id="modal_bill_id">
+                    <p class="mb-2">เลือกสถานะใหม่สำหรับ Bill #<span id="modal_bill_display"></span></p>
+                    <select id="modal_new_status" class="w-full border p-2 rounded">
+                        <option value="Await">Await (รอส่ง)</option>
+                        <option value="Pending">Pending (กำลังส่ง)</option>
+                        <option value="Delivered">Delivered (ส่งสำเร็จ)</option>
+                        <option value="Cancel">Cancel (ยกเลิก)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end pt-2">
+                    <button onclick="saveStatus()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">บันทึก</button>
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded ml-3 hover:bg-gray-400">ปิด</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000"; 
+        let vehicleChartInstance = null;
+        let employeeChartInstance = null;
+
+        // --- AUTH ---
+        async function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({username: u, password: p})
+                });
+                if(!res.ok) throw new Error("Login Failed");
+                const data = await res.json();
+                localStorage.setItem('token', data.access_token);
+                window.location.reload();
+            } catch(err) { alert(err.message); }
+        }
+
+        function logout() { localStorage.removeItem('token'); window.location.reload(); }
+
+        // --- INIT ---
+        window.onload = async () => {
+            const token = localStorage.getItem('token');
+            if(!token) return;
+
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_URL}/users/me`, { headers: {'Authorization': `Bearer ${token}`} });
+                if(!res.ok) throw new Error("Unauthorized");
+                const user = await res.json();
+                
+                document.getElementById('user-display').innerText = `User: ${user.username} (${user.role})`;
+                const role = (user.role || "").toLowerCase();
+
+                if(role === 'admin') {
+                    document.getElementById('menu-admin').classList.remove('hidden');
+                    showPage('admin-user');
+                } else if(role === 'ceo') {
+                    document.getElementById('menu-ceo').classList.remove('hidden');
+                    showPage('ceo-page');
+                    loadCEOCharts();
+                } else {
+                    document.getElementById('menu-employee').classList.remove('hidden');
+                    showPage('emp-list-bill');
+                    loadDropdowns();
+                    loadBills();
+                }
+            } catch(err) { logout(); }
+        };
+
+        function showPage(id) {
+            document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+
+            // Load Data automatically when page is shown
+            if(id === 'admin-user') loadAdminData('users');
+            if(id === 'admin-emp') loadAdminData('employees');
+            if(id === 'admin-vehicle') loadAdminData('vehicles');
+        }
+
+        // --- ADMIN: LOAD DATA ---
+        async function loadAdminData(type) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/${type}/`, { headers: {'Authorization': `Bearer ${token}`} });
+                if(!res.ok) return;
+                const data = await res.json();
+                
+                let html = '';
+                if(type === 'users') {
+                    html = data.map(u => `
+                        <tr>
+                            <td class="p-4">${u.User_id}</td>
+                            <td class="p-4 font-bold text-gray-700">${u.Username}</td>
+                            <td class="p-4 text-gray-500">${u.Role_role_id == 1 ? 'Admin' : (u.Role_role_id == 2 ? 'Employee' : 'CEO/Driver')}</td>
+                            <td class="p-4"><span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">${u.status || 'Active'}</span></td>
+                        </tr>`).join('');
+                    document.getElementById('table-users').innerHTML = html;
+                }
+                else if(type === 'employees') {
+                    html = data.map(e => `
+                        <tr>
+                            <td class="p-4">${e.Employee_id}</td>
+                            <td class="p-4 font-bold text-gray-700">${e.Employee_name}</td>
+                            <td class="p-4">${e.Phone}</td>
+                            <td class="p-4"><span class="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">${e.Status}</span></td>
+                        </tr>`).join('');
+                    document.getElementById('table-emps').innerHTML = html;
+                }
+                else if(type === 'vehicles') {
+                    html = data.map(v => `
+                        <tr>
+                            <td class="p-4">${v.Vehicle_id}</td>
+                            <td class="p-4 font-bold text-gray-700">${v.License_plate}</td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 rounded-full text-xs ${v.Status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                    ${v.Status}
+                                </span>
+                            </td>
+                        </tr>`).join('');
+                    document.getElementById('table-vehs').innerHTML = html;
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // --- ADMIN: CREATE ---
+        async function adminCreateUser(e) {
+            e.preventDefault();
+            const body = {
+                Username: document.getElementById('new_u_name').value,
+                Password_hash: document.getElementById('new_u_pass').value,
+                Role_role_id: parseInt(document.getElementById('new_u_role').value),
+                Employee_id: parseInt(document.getElementById('new_u_empid').value),
+                status: "Active"
+            };
+            await sendPost('/users', body);
+            loadAdminData('users'); // Refresh Table
+        }
+
+        async function adminCreateEmp(e) {
+            e.preventDefault();
+            const body = {
+                Employee_name: document.getElementById('emp_name').value,
+                Phone: document.getElementById('emp_phone').value,
+                Status: "Active" // Default status, Database ID Auto
+            };
+            await sendPost('/employees', body);
+            loadAdminData('employees'); // Refresh Table
+        }
+
+        async function adminCreateVehicle(e) {
+            e.preventDefault();
+            const body = {
+                License_plate: document.getElementById('veh_plate').value,
+                Status: document.getElementById('veh_status').value
+            };
+            await sendPost('/vehicles', body);
+            loadAdminData('vehicles'); // Refresh Table
+        }
+
+        // --- CEO CHART ---
+        async function loadCEOCharts() {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/dashboard/stats`, { headers: {'Authorization': `Bearer ${token}`} });
+            const data = await res.json();
+
+            if(vehicleChartInstance) vehicleChartInstance.destroy();
+            if(employeeChartInstance) employeeChartInstance.destroy();
+
+            const vCtx = document.getElementById('vehicleChart').getContext('2d');
+            vehicleChartInstance = new Chart(vCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data.vehicles),
+                    datasets: [{ data: Object.values(data.vehicles), backgroundColor: ['#4ade80','#f87171','#fbbf24'] }]
+                }
+            });
+
+            const eCtx = document.getElementById('employeeChart').getContext('2d');
+            employeeChartInstance = new Chart(eCtx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(data.employees),
+                    datasets: [{ data: Object.values(data.employees), backgroundColor: ['#60a5fa','#a78bfa','#e879f9'] }]
+                }
+            });
+        }
+
+        async function sendPost(endpoint, body) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify(body)
+                });
+                if(res.ok) { 
+                    alert("บันทึกสำเร็จ!"); 
+                    // Clear Forms
+                    document.querySelectorAll('input').forEach(i => i.value = '');
+                }
+                else { const err = await res.json(); alert("Error: " + err.detail); }
+            } catch(e) { alert("Error connecting to server"); }
+        }
+
+        // --- EMPLOYEE API ---
+        async function loadDropdowns() {
+            const token = localStorage.getItem('token');
+            const [resV, resE] = await Promise.all([
+                fetch(`${API_URL}/vehicles/`, { headers: {'Authorization': `Bearer ${token}`} }),
+                fetch(`${API_URL}/employees/`, { headers: {'Authorization': `Bearer ${token}`} })
+            ]);
+            const vehs = await resV.json();
+            const emps = await resE.json();
+
+            document.getElementById('bill_vehicle').innerHTML = vehs.map(v => `<option value="${v.Vehicle_id}">${v.License_plate}</option>`).join('');
+            document.getElementById('bill_employee').innerHTML = emps.map(e => `<option value="${e.Employee_id}">${e.Employee_name}</option>`).join('');
+        }
+
+        async function createBill(e) {
+            e.preventDefault();
+            const body = {
+                Receiver_name: document.getElementById('bill_receiver').value,
+                Receiver_phone: document.getElementById('bill_phone').value,
+                Vehicle_Vehicle_id: parseInt(document.getElementById('bill_vehicle').value),
+                Employee_Employee_id: parseInt(document.getElementById('bill_employee').value)
+            };
+            sendPost('/delivery-bills/', body);
+        }
+
+        async function loadBills() {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/delivery-bills/`, { headers: {'Authorization': `Bearer ${token}`} });
+            const bills = await res.json();
+            
+            const html = bills.map(b => `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="p-4 font-mono text-sm text-gray-500">#${b.Bill_id}</td>
+                    <td class="p-4 font-medium">${b.Receiver_name}</td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(b.status)}">
+                            ${b.status}
+                        </span>
+                    </td>
+                    <td class="p-4 text-center">
+                        <button onclick="openModal(${b.Bill_id}, '${b.status}')" class="bg-blue-100 text-blue-600 px-3 py-1 rounded hover:bg-blue-200 text-sm">
+                            <i class="fas fa-edit"></i> อัปเดต
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            document.getElementById('billTableBody').innerHTML = html;
+        }
+
+        function getStatusColor(status) {
+            if(status === 'Delivered') return 'bg-green-100 text-green-800';
+            if(status === 'Pending') return 'bg-yellow-100 text-yellow-800';
+            if(status === 'Cancel') return 'bg-red-100 text-red-800';
+            return 'bg-gray-100 text-gray-800';
+        }
+
+        // --- MODAL LOGIC ---
+        function openModal(id, currentStatus) {
+            document.getElementById('modal_bill_id').value = id;
+            document.getElementById('modal_bill_display').innerText = id;
+            document.getElementById('modal_new_status').value = currentStatus;
+            
+            const modal = document.getElementById('statusModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            document.body.classList.add('modal-active');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('statusModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            document.body.classList.remove('modal-active');
+        }
+
+        async function saveStatus() {
+            const id = document.getElementById('modal_bill_id').value;
+            const status = document.getElementById('modal_new_status').value;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch(`${API_URL}/delivery-bills/${id}/status`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({ status: status })
+                });
+                if(res.ok) { closeModal(); loadBills(); }
+                else { alert("Update failed"); }
+            } catch(e) { alert("Error connecting to server"); }
+        }
+
+    </script>
+</body>
+</html>

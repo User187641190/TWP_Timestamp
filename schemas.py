@@ -97,7 +97,7 @@ class EmployeeBase(BaseModel):
 
 class EmployeeCreate(BaseModel):
     Employee_name: str
-    Phone: Optional[str] = None
+    Phone: str
     Status: EmployeeStatus = EmployeeStatus.ACTIVE
 
 class Employee(EmployeeBase):
@@ -112,8 +112,9 @@ class VehicleBase(BaseModel):
     Vehicle_description: str | None=None
     Status: VehicleStatus = VehicleStatus.AVAILABLE
 
-class VehicleCreate(VehicleBase):
-    Vehicle_id: int
+class VehicleCreate(BaseModel):
+    License_plate: str
+    Status: VehicleStatus = VehicleStatus.AVAILABLE
 
 class Vehicle(VehicleBase):
     Vehicle_id: int
@@ -155,6 +156,8 @@ class DeliveryTimeLog(DeliveryTimeLogBase):
     class Config:
         from_attributes = True
 
+class DeliveryBillUpdateStatus(BaseModel):
+    status: DeliveryBillStatus
 # ==========================================
 # 5. Delivery Bill (พระเอกของเรา)
 # ==========================================
