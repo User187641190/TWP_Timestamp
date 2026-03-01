@@ -10,8 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 from passlib.context import CryptContext 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# เพิ่มไว้ใน main.py
+
 
 
 # Import ไฟล์ภายในโปรเจค
@@ -25,6 +24,7 @@ from schemas import UserShow
 from deps import SECRET_KEY, ALGORITHM
 
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def reset_daily_employee_status():
     """
@@ -93,17 +93,24 @@ def Nothing():
 #       |_||_|   |_||_|       |_|       \____/  |_____/     |_|   
 #                                                                 
 #                                                                 
-@app.post("/employees", response_model=schemas.Employee)
-def create_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
+
+@app.post("/employees/", status_code=status.HTTP_201_CREATED)
+def create_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db)):
+    
+    # สร้าง Object Employee ตาม models.py
     new_emp = models.Employee(
         Employee_name=emp.Employee_name,
-        Phone=emp.Phone,
-        Status=emp.Status
+        Phone=emp.Phone
+        # ถ้า Model มี Status ให้ uncomment บรรทัดล่าง
+        # , Status=emp.Status 
     )
+    
     db.add(new_emp)
     db.commit()
     db.refresh(new_emp)
+    
     return new_emp
+
 
 @app.post("/vehicles", response_model=schemas.Vehicle)
 def create_vehicle(veh: schemas.VehicleCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
@@ -213,33 +220,39 @@ def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db) , curren
     return new_role
 
 
-@app.post("/users/", response_model=schemas.User)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
-    db_user = db.query(models.User).filter(models.User.User_id == user.User_id).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="User ID already exists")
+@app.post("/users", response_model=schemas.UserShow) # ใช้ UserShow เพื่อไม่ให้ส่ง Password กลับ
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     
-    db_emp = db.query(models.Employee).filter(models.Employee.Employee_id == user.Employee_id).first()
-    if not db_emp:
-        raise HTTPException(status_code=404, detail="Employee ID not found (Must create Employee first)")
-    
-    db_role = db.query(models.Role).filter(models.Role.role_id == user.Role_role_id).first()
-    if not db_role:
-        raise HTTPException(status_code=404, detail="Role ID not found (Must create Role first)")
-    
+    # 1. เช็คว่า Username ซ้ำไหม
+    existing_user = db.query(models.User).filter(models.User.Username == user.Username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username นี้มีผู้ใช้งานแล้ว")
+
+    # 2. เช็คว่า Employee ID มีอยู่จริงไหม (กัน Error 500)
+    emp = db.query(models.Employee).filter(models.Employee.Employee_id == user.Employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail=f"ไม่พบพนักงานรหัส {user.Employee_id} ในระบบ")
+
+    # 3. สร้าง User (ต้อง Map ชื่อตัวแปรให้ตรงกับ models.py)
+    # Password ต้อง Hash ก่อนบันทึก ไม่งั้น Login ไม่ได้
+    hashed_password = pwd_context.hash(user.Password_hash)
+
     new_user = models.User(
-        User_id=user.User_id,
-        Username=user.Username,
-        Password_hash=user.Password_hash,
-        status=user.status,
-        Employee_Employee_id=user.Employee_id, 
-        Role_role_id=user.Role_role_id
+        Username = user.Username,
+        Password_hash = hashed_password, # บันทึกแบบ Hash
+        status = user.status,
+        Role_role_id = user.Role_role_id,
+        Employee_Employee_id = user.Employee_id # จุดสำคัญ! เอาค่าจาก schema.Employee_id ใส่เข้า model.Employee_Employee_id
     )
-    
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
+
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return new_user
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
 
 # main.py
@@ -282,9 +295,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 #                                                        
 
 @app.get("/employees/", response_model=List[schemas.Employee])
-def read_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(get_current_user)):
-    return db.query(models.Employee).offset(skip).limit(limit).all()
-
+def read_employees(db: Session = Depends(get_db)):
+    return db.query(models.Employee).all()
 
 @app.get("/vehicles/", response_model=List[schemas.Vehicle])
 def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(get_current_user)):
@@ -322,24 +334,25 @@ def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , 
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
 
-@app.get("/users/me")  # ลบ response_model=UserShow ออกชั่วคราว เพื่อความยืดหยุ่น
+@app.get("/users/me") 
 async def read_users_me(current_user: models.User = Depends(get_current_user)):
-    # 1. แปลง Role ID เป็นชื่อ (Mapping)
-    # เช็คตาม Database ของคุณว่าเลขไหนคือตำแหน่งอะไร
+    
+    # Mapping ชื่อ Role
     role_name = "User"
     if current_user.Role_role_id == 1:
-        role_name = "Admin"   # ต้องตรงกับที่ JS เช็ค (ตัวเล็ก/ใหญ่สำคัญ)
+        role_name = "Admin"
     elif current_user.Role_role_id == 2:
-        role_name = "Staff"   # หรือ Employee
+        role_name = "Employee"
     elif current_user.Role_role_id == 3:
-        role_name = "Driver"
+        role_name = "CEO"
 
-    # 2. ส่ง JSON กลับไปแบบ Manual (เพื่อให้ได้ field "role" ที่หน้าเว็บต้องการ)
+    # ส่ง JSON กลับไป
     return {
         "User_id": current_user.User_id,
-        "username": current_user.Username,
-        "role": role_name,           # <--- นี่คือตัวที่หน้าเว็บรออยู่!
-        "role_id": current_user.Role_role_id,
+        "Username": current_user.Username,
+        "Role_id": current_user.Role_role_id,   # ส่งไปให้ JS เช็ค
+        "Role_role_id": current_user.Role_role_id, # ส่งเผื่อไปอีกชื่อกันพลาด
+        "Role_name": role_name,                 # ส่งชื่อไปโชว์
         "status": current_user.status
     }
 
