@@ -116,7 +116,8 @@ def create_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db)):
 def create_vehicle(veh: schemas.VehicleCreate, db: Session = Depends(get_db), current_user = Depends(check_admin_role)):
     new_veh = models.Vehicle(
         License_plate=veh.License_plate,
-        Status=veh.Status
+        Status=veh.Status,
+        Description=veh.Description
     )
     db.add(new_veh)
     db.commit()
@@ -299,8 +300,8 @@ def read_employees(db: Session = Depends(get_db)):
     return db.query(models.Employee).all()
 
 @app.get("/vehicles/", response_model=List[schemas.Vehicle])
-def read_vehicles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db) , current_user = Depends(get_current_user)):
-    return db.query(models.Vehicle).offset(skip).limit(limit).all()
+def read_vehicles(db: Session = Depends(get_db)):
+    return db.query(models.Vehicle).all()
 
 
 @app.get("/products/", response_model=List[schemas.Product])
@@ -430,5 +431,19 @@ def clear_database(db: Session = Depends(get_db) , current_user = Depends(check_
     except Exception as e:
         db.rollback()
 
+@app.delete("/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+    # 1. ค้นหารถจาก ID
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.Vehicle_id == vehicle_id).first()
+    
+    # 2. ถ้าไม่เจอให้ฟ้อง Error 404
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    # 3. ถ้าเจอ ก็สั่งลบแล้ว Commit
+    db.delete(vehicle)
+    db.commit()
+    
+    return {"message": "Vehicle deleted successfully"}
 
 

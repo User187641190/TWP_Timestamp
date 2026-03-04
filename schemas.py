@@ -108,12 +108,13 @@ class Employee(EmployeeBase):
 # --- Vehicle ---
 #——————————————————————————            
 class VehicleBase(BaseModel):
-    license_plate: str
-    Vehicle_description: str | None=None
+    License_plate: str
+    Description: Optional[str] = None
     Status: VehicleStatus = VehicleStatus.AVAILABLE
 
 class VehicleCreate(BaseModel):
     License_plate: str
+    Description: Optional[str] = None
     Status: VehicleStatus = VehicleStatus.AVAILABLE
 
 class Vehicle(VehicleBase):

@@ -45,8 +45,8 @@ class Vehicle(Base):
     __tablename__ = "Vehicle"
     Vehicle_id = Column(Integer, Identity(start=1), primary_key=True)
     License_plate = Column(String(20))
-    
     Status = Column(Enum(VehicleStatus), default=VehicleStatus.AVAILABLE, nullable=False)
+    Description = Column(String(255), nullable=True)
     
     deliveries = relationship("DeliveryBill", back_populates="vehicle")
 
