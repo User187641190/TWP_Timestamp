@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date, Enum, Identity
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date, Enum, Identity, Time
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -52,8 +52,8 @@ class Vehicle(Base):
 
 class DeliveryBill(Base):
     __tablename__ = "DeliveryBill"
-    Bill_id = Column(Integer, Identity(start=1), primary_key=True)
-    
+    Bill_id = Column(Integer, primary_key=True)
+    delivery_date = Column(Date, nullable=False)
     # FK
     Employee_Employee_id = Column(Integer, ForeignKey("Employee.Employee_id"))
     Vehicle_Vehicle_id = Column(Integer, ForeignKey("Vehicle.Vehicle_id"))
@@ -61,7 +61,7 @@ class DeliveryBill(Base):
     Receiver_name = Column(String(100))
     Receiver_phone = Column(String(20))
     
-    start_time = Column(DateTime, default=datetime.datetime.now)
+    start_time = Column(Time, default=datetime.datetime.now)
     arrive_time = Column(DateTime, nullable=True)
     finish_time = Column(DateTime, nullable=True)
     
@@ -127,9 +127,19 @@ class User(Base):
     Password_hash = Column(String(255))
     status = Column(String(50), default="Active")
     Created_at = Column(Date, default=datetime.date.today)
-    
+
     Employee_Employee_id = Column(Integer, ForeignKey("Employee.Employee_id"))
     Role_role_id = Column(Integer, ForeignKey("Role.role_id"))
     
     role = relationship("Role", back_populates="users")
     # employee = relationship("Employee", back_populates="users")
+
+
+class Product(Base):
+    __tablename__ = "Product"
+    
+    Product_id = Column(Integer , primary_key=True)
+    Product_name = Column(String(100) , unique=True)
+    quantity = Column(Integer)
+    Product_price = Column(Integer)
+    

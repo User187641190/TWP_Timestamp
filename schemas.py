@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, time
 # Import Enums จาก models.py (ต้องมีไฟล์ models.py ที่ประกาศ Enum ไว้แล้วนะ)
 from models import EmployeeStatus, VehicleStatus, DeliveryBillStatus
 
@@ -12,30 +12,25 @@ from models import EmployeeStatus, VehicleStatus, DeliveryBillStatus
 # --- User / Login System ---
 #——————————————————————————            
 class UserBase(BaseModel):
-    User_id: int
     Username: str
     status: str | None = "Active" 
+    Password_hash: str
+    Employee_Employee_id: int 
+    Role_role_id: int
 
 class UserCreate(UserBase):
-    Username: str
-    Password_hash: str
-    status: str | None = "Active" 
-    Employee_id: int 
-    Role_role_id: int
+    pass
 
 class User(UserBase):
-    # เวลาส่งข้อมูลกลับ ไม่ควรส่ง Password_hash กลับไป (เพื่อความปลอดภัย)
-    Employee_Employee_id: int
-    Role_role_id: int
-    
+    User_id: int 
     class Config:
         from_attributes = True
 
 class UserShow(UserBase):
-    # เวลาส่งข้อมูลกลับ ไม่ควรส่ง Password_hash กลับไป (เพื่อความปลอดภัย)
+    User_id: int
     Employee_Employee_id: int
     Role_role_id: int
-    
+    Username: str
     class Config:
         from_attributes = True
 
@@ -56,31 +51,16 @@ class Product(ProductBase):
     class Config:
         from_attributes = True
 
-# ==========================================
-# 2. Helper Schemas for Nesting (ตัวช่วยแสดงผล)
-# ==========================================
-# ใช้สำหรับแสดงข้อมูลย่อในตารางอื่น เพื่อป้องกัน Loop ไม่จบสิ้น
-
-class EmployeeShow(BaseModel):
-    Employee_id: int
-    Employee_name: str
-    Status: EmployeeStatus
-    class Config:
-        from_attributes = True
-
-class VehicleShow(BaseModel):
-    Vehicle_id: int
-    license_plate: str
-    Vehicle_description: str
-    Status: VehicleStatus
-    class Config:
-        from_attributes = True
-
 class ProductShow(BaseModel):
     Product_id: int
     Product_name: str
     class Config:
         from_attributes = True
+
+# ==========================================
+# 2. Helper Schemas for Nesting (ตัวช่วยแสดงผล)
+# ==========================================
+# ใช้สำหรับแสดงข้อมูลย่อในตารางอื่น เพื่อป้องกัน Loop ไม่จบสิ้น
 
 # ==========================================
 # 3. Main Entity Schemas (ข้อมูลหลัก)
@@ -89,6 +69,12 @@ class ProductShow(BaseModel):
 #——————————————————————————            
 # --- Employee ---
 #——————————————————————————            
+class EmployeeShow(BaseModel):
+    Employee_id: int
+    Employee_name: str
+    Status: EmployeeStatus
+    class Config:
+        from_attributes = True
 
 class EmployeeBase(BaseModel):
     Employee_name: str
@@ -122,6 +108,16 @@ class Vehicle(VehicleBase):
     class Config:
         from_attributes = True
 
+class VehicleShow(BaseModel):
+    Vehicle_id: int
+    license_plate: str
+    Vehicle_description: str
+    Status: VehicleStatus
+    class Config:
+        from_attributes = True
+
+class VehicleStatusUpdate(BaseModel):
+    status: str
 # ==========================================
 # 4. Transaction Schemas (รายการย่อยในบิล)
 # ==========================================
@@ -167,12 +163,12 @@ class DeliveryBillUpdateStatus(BaseModel):
 # --- Base ---
 #——————————————————————————            
 class DeliveryBillBase(BaseModel):
-    bill_id: int
+    Bill_id: int
     delivery_date: Optional[date] = None
     status: DeliveryBillStatus = DeliveryBillStatus.AWAIT
     Receiver_name : str     #Name
     Receiver_phone : str
-    start_time : datetime    #011-111-1111
+    start_time : time    #011-111-1111
     Employee_Employee_id: int   #1,2,3 etc.
     Vehicle_Vehicle_id: int #1,2,3 etc.
 

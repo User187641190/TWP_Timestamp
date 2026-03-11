@@ -1,0 +1,40 @@
+
+services:
+  mysql_db:
+    image: mysql:8.0
+    container_name: delivery_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678  # รหัสผ่านของฐานข้อมูล
+      MYSQL_DATABASE: delivery_db    # สร้าง Database ชื่อนี้ให้อัตโนมัติ
+    ports:
+      - "3306:3306" # แมปพอร์ตให้ FastAPI ในเครื่องเรามองเห็น
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: delivery_phpmyadmin
+    restart: always
+    ports:
+      - "8080:80" # แมปพอร์ตเข้าหน้าเว็บ phpMyAdmin
+    environment:
+      PMA_HOST: mysql_db
+      PMA_USER: root
+      PMA_PASSWORD: 12345678
+
+  frontend:
+    image: nginx:alpine
+    container_name: delivery_frontend
+    restart: always
+    ports:
+      - "3000:80"  # เข้าเว็บผ่านพอร์ต 3000 (เพื่อไม่ให้ชนกับระบบอื่น)
+    volumes:
+      - ./frontend:/usr/share/nginx/html  # ชี้โฟลเดอร์หน้าเว็บเรา ไปใส่ใน Nginx
+      
+  backend:
+      build: .   # สั่งให้สร้าง Image จากไฟล์ Dockerfile ในโฟลเดอร์นี้
+      container_name: delivery_fastapi
+      restart: always
+      ports:
+        - "8000:8000" # แมปพอร์ต 8000 ออกมาให้หน้าบ้านเรียกใช้ได้
+      depends_on:
+        - mysql_db # สั่งให้รอ Database ติดเครื่องเสร็จก่อน ค่อยรัน FastAPI

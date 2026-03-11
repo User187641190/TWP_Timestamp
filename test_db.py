@@ -1,9 +1,7 @@
 import sys
 from sqlalchemy import create_engine, text
 
-# ลอง Connection String ที่เราแก้ล่าสุด
-# ตรวจสอบ User/Pass/ServiceName ให้ตรงเป๊ะๆ
-DATABASE_URL = "oracle+oracledb://Backend:BackendPass@localhost:1521/?service_name=FREEPDB1"
+DATABASE_URL = "mysql+pymysql://root:12345678@localhost:3306/delivery_db"
 def Test_db():
     try:
         print(f"🔄 Attempting to connect to: {DATABASE_URL}")

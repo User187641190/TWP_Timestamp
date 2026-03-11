@@ -5,11 +5,9 @@ from sqlalchemy.orm import sessionmaker
 
 # URL สำหรับเชื่อมต่อ Database
 # ถ้าใช้ SQLite (ไฟล์อยู่ในเครื่อง) ให้ใช้บรรทัดล่างนี้:
-SQLALCHEMY_DATABASE_URL = "oracle+oracledb://Backend:BackendPass@localhost:1521/?service_name=FREEPDB1"
+SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:12345678@mysql_db:3306/delivery_db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL # check_same_thread ใช้เฉพาะกับ SQLite
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+pydantic
+python-jose[cryptography]
+apscheduler
+pytz
+passlib
+python-multipart
