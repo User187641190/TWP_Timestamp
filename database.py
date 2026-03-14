@@ -3,8 +3,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# URL สำหรับเชื่อมต่อ Database
-# ถ้าใช้ SQLite (ไฟล์อยู่ในเครื่อง) ให้ใช้บรรทัดล่างนี้:
 SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:12345678@mysql_db:3306/delivery_db"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
