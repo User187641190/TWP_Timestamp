@@ -1,16 +1,19 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 import models
 import schemas
-from database import engine, get_db
 
-# สั่งให้สร้างตารางใน Database อัตโนมัติ
-models.Base.metadata.create_all(bind=engine)
+from database import engine, get_db
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
 
 app = FastAPI(title="WMS System API (Refactored)")
-
 # CORS ตั้งค่าให้หน้าบ้านเรียก API ได้
 app.add_middleware(
     CORSMiddleware,
@@ -20,9 +23,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SECRET_KEY = "YOUR_SUPER_SECRET_KEY_OAT" # ในระบบจริงควรใช้รหัสที่ซับซ้อนกว่านี้
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 # Token หมดอายุใน 60 นาที
 
-from sqlalchemy import text
-from fastapi import HTTPException
+# ตัวที่ทำให้ Swagger UI มีปุ่ม Authorize
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
 
 # API ดึงข้อมูลจาก View (Dynamic Endpoint)
 @app.get("/api/views/{view_name}")
@@ -45,9 +52,80 @@ def get_view_data(view_name: str, db: Session = Depends(get_db)):
     
     return result
 
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    
+    to_encode.update({"exp": expire})
+    # สร้าง JWT Token
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# --- ฟังก์ชันถอดรหัส Token และดึงข้อมูล User ปัจจุบัน ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="ไม่สามารถยืนยันตัวตนได้ (Token อาจจะหมดอายุหรือไม่ถูกต้อง)",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # ถอดรหัส Token เพื่อเอา username ออกมา
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    # เอา username ไปค้นหาใน Database
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+
+
+
 @app.get("/")
 def read_root():
     return {"message": "✅ API is running with the new schema!"}
+
+# ---- LOGIN ----
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    
+    # เช็ครหัสผ่าน (แบบไม่ได้เข้ารหัสเพื่อเทสกับ Mock Data)
+    if not user or user.password_hash != form_data.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Username หรือ Password ไม่ถูกต้อง",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    # สร้าง Token โดยกำหนดให้อายุ 60 นาที (ตามตั้งค่าด้านบน)
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # ส่ง username เข้าไปฝังไว้ใน Token
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me")
+def read_users_me(current_user: models.User = Depends(get_current_user)):
+    # ส่งข้อมูลผู้ใช้กลับไปให้หน้าเว็บ
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "role_id": current_user.role_id,
+        "employee_id": current_user.employee_id
+    }
+
 
 # --- 1. Roles ---
 @app.get("/roles", response_model=list[schemas.RoleResponse])
