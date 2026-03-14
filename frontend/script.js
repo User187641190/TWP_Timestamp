@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8000"; 
+const API_URL = "http://192.168.0.102:8000"; 
 
 // ---- 1. AUTHENTICATION ----
 async function handleLogin(e) {
@@ -28,7 +28,7 @@ async function handleLogin(e) {
             text: 'User หรือ Password ผิดพลาด',
             icon: 'error',
             confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#3b82f6' // สีฟ้าแบบ Tailwind
+            confirmButtonColor: '#3b82f6'
         });
     }
 }
@@ -58,19 +58,17 @@ window.onload = async () => {
         console.log("User Data from API:", user); 
 
         // แสดงชื่อ
-        document.getElementById('user-display-name').innerText = user.Username || user.username;
+        document.getElementById('user-display-name').innerText = user.username;
         
         // ถ้าไม่มี Role_name ส่งมา ให้เดาจาก ID เอา
-        let r_id = user.Role_id || user.Role_role_id; // ✅ แก้ตรงนี้: เช็คทั้ง 2 ชื่อ
+        let r_id = user.role_id; 
         
-        // Mapping ชื่อ Role เพื่อแสดงผล (กรณี Backend ไม่ส่ง Role_name มา)
-        let r_name = user.Role_name;
-        if (!r_name) {
-            if(r_id == 1) r_name = "Admin";
-            else if(r_id == 2) r_name = "Employee";
-            else if(r_id == 3) r_name = "CEO";
-            else r_name = "Unknown";
-        }
+        // Mapping ชื่อ Role เพื่อแสดงผล
+        let r_name = "Unknown";
+        if(r_id == 1) r_name = "Admin";
+        else if(r_id == 2) r_name = "Employee";
+        else if(r_id == 3) r_name = "CEO";
+        
         document.getElementById('user-display-role').innerText = r_name;
 
         // เช็ค Role เพื่อเปิดเมนู
@@ -108,9 +106,13 @@ function checkRole(roleId) {
         // === CEO ===
         console.log("Welcome CEO!");
         document.getElementById('menu-ceo').classList.remove('hidden');
-        showPage('ceo-page'); // เปิดหน้าแรกของ CEO
-        loadCEOCharts(); // วาดกราฟทันที
-    } 
+        showPage('ceo-page'); 
+        
+        loadCEOCharts(); // วาดกราฟ
+        
+        // 🚨 เพิ่มบรรทัดนี้: โหลดตาราง View ทันทีที่เข้าสู่ระบบเป็น CEO
+        fetchAndDisplayView(); 
+    }
     else {
         alert("Role ของคุณไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ");
         logout();
@@ -146,12 +148,12 @@ async function loadAdminData(type) {
         if(type === 'employees') {
             html = data.map(e => `
                 <tr class="hover:bg-gray-50 border-b">
-                    <td class="p-4 font-mono">${e.Employee_id}</td>
-                    <td class="p-4 font-bold text-gray-700">${e.Employee_name}</td>
-                    <td class="p-4 text-gray-600">${e.Phone}</td>
-                    <td class="p-4"><span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">${e.Status}</span></td>
+                    <td class="p-4 font-mono">${e.id}</td>
+                    <td class="p-4 font-bold text-gray-700">${e.name}</td>
+                    <td class="p-4 text-gray-600">-</td>
+                    <td class="p-4"><span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">${e.work_status || 'Active'}</span></td>
                     <td class="p-4 text-right">
-                        <button onclick="deleteData('employees', ${e.Employee_id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm shadow-sm transition">
+                        <button onclick="deleteData('employees', ${e.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm shadow-sm transition">
                             <i class="fas fa-trash"></i> ลบ
                         </button>
                     </td>
@@ -159,15 +161,12 @@ async function loadAdminData(type) {
             document.getElementById('table-emps').innerHTML = html;
         }
         else if(type === 'vehicles') {
-                // 🔍 ปริ้นข้อมูลออกมาดูใน Console (กด F12)
                 console.log("Vehicle Data from API:", data); 
 
                 html = data.map(v => {
-                    // รองรับทั้งตัวพิมพ์เล็กและพิมพ์ใหญ่
-                    const id = v.Vehicle_id || v.vehicle_id;
-                    const plate = v.License_plate || v.license_plate;
-                    const status = v.Status || v.status;
-                    const desc = v.Description || v.description || "-"; // ถ้าไม่มีรายละเอียดให้แสดงขีด
+                    const id = v.id;
+                    const plate = v.name || "-";
+                    const desc = v.description || "-"; 
 
                     return `
                     <tr class="hover:bg-gray-50 border-b">
@@ -177,8 +176,8 @@ async function loadAdminData(type) {
                             <div class="text-xs text-gray-500">${desc}</div> 
                         </td>
                         <td class="p-4">
-                            <span class="px-2 py-1 rounded-full text-xs ${status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                ${status}
+                            <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                                Active
                             </span>
                         </td>
                         <td class="p-4 text-right">
@@ -193,12 +192,12 @@ async function loadAdminData(type) {
         else if(type === 'users') {
             html = data.map(u => `
                 <tr class="hover:bg-gray-50 border-b">
-                    <td class="p-4 font-mono">${u.User_id}</td>
-                    <td class="p-4 font-bold">${u.Username}</td>
-                    <td class="p-4 text-sm text-gray-500">${u.Role_role_id === 1 ? 'Admin' : (u.Role_role_id === 3 ? 'CEO' : 'Employee')}</td>
-                    <td class="p-4"><span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">${u.status || 'Active'}</span></td>
+                    <td class="p-4 font-mono">${u.id}</td>
+                    <td class="p-4 font-bold">${u.username}</td>
+                    <td class="p-4 text-sm text-gray-500">${u.role_id === 1 ? 'Admin' : (u.role_id === 3 ? 'CEO' : 'Employee')}</td>
+                    <td class="p-4"><span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">Active</span></td>
                     <td class="p-4 text-right">
-                        <button onclick="deleteData('users', ${u.User_id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm shadow-sm transition">
+                        <button onclick="deleteData('users', ${u.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm shadow-sm transition">
                             <i class="fas fa-trash"></i> ลบ
                         </button>
                     </td>
@@ -211,16 +210,9 @@ async function loadAdminData(type) {
 
 async function adminCreateEmp(e) {
     e.preventDefault();
-    // // Database Auto ID, ส่งแค่ชื่อกับเบอร์
-    // const body = {
-    //     Employee_name: document.getElementById('emp_name').value,
-    //     Phone: document.getElementById('emp_phone').value,
-    //     Status: "Active" 
-    // };
     const empName = document.getElementById('emp_name').value;
     const empPhone = document.getElementById('emp_phone').value;
     
-
     if (empPhone.length !== 10) {
         Swal.fire({
             title: 'เบอร์โทรศัพท์ไม่ถูกต้อง',
@@ -231,13 +223,12 @@ async function adminCreateEmp(e) {
         return; 
     }
     const body = {
-        Employee_name: empName, 
-        Phone: empPhone,        
-        Status: "Active"
+        name: empName,         
+        work_status: "Active"
     };
 
     try {
-        await sendPost('/employees/', body);
+        await sendPost('/employees', body);
         Swal.fire({
             title: 'สำเร็จ!',
             text: 'เพิ่มพนักงานใหม่เรียบร้อยแล้ว',
@@ -247,19 +238,12 @@ async function adminCreateEmp(e) {
         });
         loadAdminData('employees');
 
-    } catch (err) {
-        // กรณี Error (sendPost อาจจะ throw error มา)
-        // ปกติ sendPost เรามี alert อยู่แล้ว แต่ถ้าอยากให้สวยด้วยก็แก้ใน sendPost ได้ครับ
-    }
+    } catch (err) {}
 }
 
 async function adminCreateVehicle(e) {
     e.preventDefault();
-    const body = {
-        License_plate: document.getElementById('veh_plate').value,
-        Description: document.getElementById('veh_desc').value,
-        Status: document.getElementById('veh_status').value
-    };
+    const veh_plate = document.getElementById('veh_plate').value;
     if (!veh_plate) {
         Swal.fire({
             title: 'แจ้งเตือน',
@@ -269,6 +253,11 @@ async function adminCreateVehicle(e) {
         });
         return;
     }
+    const body = {
+        name: veh_plate,
+        description: document.getElementById('veh_desc').value
+    };
+    
     try {
         await sendPost('/vehicles', body);
         Swal.fire({
@@ -281,7 +270,7 @@ async function adminCreateVehicle(e) {
 
     } catch (err) {
         console.error(err);
-        }
+    }
 }
 
 async function adminCreateUser(e) {
@@ -299,60 +288,97 @@ async function adminCreateUser(e) {
             });
             const currentUsers = await resUsers.json();
 
-            // 🟢 2. ตรวจสอบว่า Employee_id นี้มีในระบบแล้วหรือยัง
-            const isDuplicate = currentUsers.some(u => u.Employee_Employee_id === empId);
+            // ตรวจสอบว่า Employee_id นี้มีในระบบแล้วหรือยัง
+            const isDuplicate = currentUsers.some(u => u.employee_id === empId);
             
             if (isDuplicate) {
                 Swal.fire({
                     title: '❌ ข้อมูลซ้ำ!',
                     text: `รหัสพนักงาน ${empId} มีบัญชีผู้ใช้งานอยู่แล้วในระบบ`,
-                    icon: 'warning', // ใช้ไอคอนแจ้งเตือนสีเหลือง
+                    icon: 'warning', 
                     confirmButtonText: 'ตกลง',
-                    confirmButtonColor: '#f59e0b' // สีเหลืองส้ม Tailwind
+                    confirmButtonColor: '#f59e0b' 
                 });
-                return; // 🛑 สั่งหยุดการทำงานทันที ไม่ให้ส่ง API สร้าง User ต่อ
+                return; 
             }
 
         } catch (err) {
             console.error("เช็คข้อมูลซ้ำไม่ได้:", err);
-            // ถ้าดึงข้อมูลมาเช็คไม่ได้ อาจจะปล่อยผ่านหรือแจ้งเตือนตามเหมาะสม
         }
 
     const body = {
-        Username: document.getElementById('new_u_name').value,
-        Password_hash: document.getElementById('new_u_pass').value,
-        Role_role_id: roleId,
-        Employee_Employee_id: empId,
-        status: "Active"
+        username: document.getElementById('new_u_name').value,
+        password: document.getElementById('new_u_pass').value,
+        role_id: roleId,
+        employee_id: empId
     };
     try {
-        // รอส่งข้อมูล ถ้าเกิด Error (เช่น 404, 422) มันจะกระโดดไปที่ catch ทันที
-        await sendPost('/users/', body);
+        await sendPost('/users', body);
             Swal.fire({
                 title: 'สำเร็จ!',
                 text: 'เพิ่มบัญชีผู้ใช้ใหม่เรียบร้อยแล้ว',
                 icon: 'success',
                 confirmButtonText: 'ตกลง',
-                confirmButtonColor: '#3b82f6' // สีฟ้าแบบ Tailwind
+                confirmButtonColor: '#3b82f6' 
             });
             loadAdminData('users');
     } catch (error) {
         console.error("สร้าง User ไม่สำเร็จ:", error);
+    }
+}
+
+async function adminCreateProduct(e) {
+    e.preventDefault(); 
+
+    const name = document.getElementById('product_name').value;
+    const qty = document.getElementById('quantity').value;
+    const price = document.getElementById('product_price').value;
+
+    const token = localStorage.getItem('token'); 
+
+    try {
+        const res = await fetch(`${API_URL}/products`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({
+                name: name,
+                stock_qty: parseInt(qty), 
+                unit_price: parseInt(price)
+            })
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.detail || "ไม่สามารถเพิ่มสินค้าได้");
+        }
+
         Swal.fire({
-            title: '❌ เกิดข้อผิดพลาด!',
-            text: 'ไม่สามารถสร้างผู้ใช้ได้ (ตรวจสอบข้อมูล Employee ID หรือ API URL อีกครั้ง)',
+            title: 'สำเร็จ!',
+            text: 'เพิ่มสินค้าลงฐานข้อมูลเรียบร้อยแล้ว',
+            icon: 'success',
+            confirmButtonColor: '#3b82f6'
+        }).then(() => {
+            document.getElementById('addProductForm').reset();
+        });
+
+    } catch(err) {
+        Swal.fire({
+            title: 'ผิดพลาด!',
+            text: err.message,
             icon: 'error',
-            confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#ef4444' // สีแดงแบบ Tailwind
+            confirmButtonColor: '#ef4444'
         });
     }
 }
+
 
 // ---- 5. EMPLOYEE FUNCTIONS ----
 async function loadDropdowns() {
     const token = localStorage.getItem('token');
     try {
-        // ดึงข้อมูลมาเติมใน Select Box
         const [resV, resU , resE] = await Promise.all([
             fetch(`${API_URL}/vehicles/`, { headers: {'Authorization': `Bearer ${token}`} }),
             fetch(`${API_URL}/users/`, { headers: {'Authorization': `Bearer ${token}`} }),
@@ -363,24 +389,22 @@ async function loadDropdowns() {
         const emp = await resE.json();
         
         document.getElementById('bill_vehicle').innerHTML = vehs.map(v => {
-            const id = v.Vehicle_id || v.vehicle_id;
-            const plate = v.License_plate || v.license_plate;
-            const desc = v.Description || v.description || "";
-            // โชว์ทะเบียน + รายละเอียด (ถ้ามี)
+            const id = v.id;
+            const plate = v.name;
+            const desc = v.description || "";
             const displayName = desc ? `${plate} (${desc})` : plate;
-            return `<option value="${id}">${displayName} - [${v.Status || v.status}]</option>`;
+            return `<option value="${id}">${displayName}</option>`;
         }).join('');
         
         const filteredEmployees = emp.filter(emp => {
-            // หาว่าใน array 'users' มีใครที่ id ตรงกัน และ Role เป็น 2 หรือไม่ (ถ้ามี .some() จะรีเทิร์น true)
-            return user.some(user => 
-                    user.Role_role_id === 2 && 
-                    emp.Employee_id === user.Employee_Employee_id
+            return user.some(u => 
+                    u.role_id === 2 && 
+                    emp.id === u.employee_id
                 );
             });
 
         document.getElementById('bill_employee').innerHTML = filteredEmployees
-            .map(emp => `<option value="${emp.Employee_id}">${emp.Employee_name}</option>`)
+            .map(emp => `<option value="${emp.id}">${emp.name}</option>`)
             .join('');
     } 
     catch(e) { 
@@ -390,36 +414,24 @@ async function loadDropdowns() {
 
 async function createBill(e) {
     e.preventDefault();
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const currentTime = `${hours}:${minutes}`;
-    
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0'); // เดือนใน JS เริ่มที่ 0 เลยต้อง +1
-    const day = String(today.getDate()).padStart(2, '0');
-    const currentDate = `${year}-${month}-${day}`;
 
     const body = {
-        Bill_id: parseInt(document.getElementById('bill_id').value),
-        Vehicle_Vehicle_id: parseInt(document.getElementById('bill_vehicle').value),
-        Employee_Employee_id: parseInt(document.getElementById('bill_employee').value),
-        Receiver_name: document.getElementById('bill_receiver').value,
-        Receiver_phone: document.getElementById('bill_phone').value,
-        start_time: currentTime,
-        delivery_date: currentDate
+        vehicle_id: parseInt(document.getElementById('bill_vehicle').value),
+        employee_id: parseInt(document.getElementById('bill_employee').value),
+        recipient_name: document.getElementById('bill_receiver').value,
+        recipient_phone: document.getElementById('bill_phone').value,
+        destination_address: "-"
     };
 
-    try {await sendPost('/delivery-bills/', body);
+    try {await sendPost('/delivery-bills', body);
         Swal.fire({
             title: 'สำเร็จ!',
             text: 'เพิ่มบิลใหม่เรียบร้อยแล้ว',
             icon: 'success',
             confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#3b82f6' // สีฟ้าแบบ Tailwind
+            confirmButtonColor: '#3b82f6' 
         });
-        showPage('emp-list-bill'); // เด้งไปหน้ารายการ
+        showPage('emp-list-bill'); 
     }
     catch (error) {
         console.error("เกิดข้อผิดพลาด: ", error);
@@ -433,16 +445,16 @@ async function loadBills() {
     
     const html = bills.map(b => `
         <tr class="border-b hover:bg-gray-50 transition">
-            <td class="p-4 font-mono text-sm text-gray-500">#${b.Bill_id}</td>
-            <td class="p-4 font-medium">${b.Receiver_name}</td>
-            <td class="p-4 text-gray-500">${b.Receiver_phone}</td>
+            <td class="p-4 font-mono text-sm text-gray-500">#${b.id}</td>
+            <td class="p-4 font-medium">${b.recipient_name}</td>
+            <td class="p-4 text-gray-500">${b.recipient_phone}</td>
             <td class="p-4">
-                <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm ${getStatusColor(b.status)}">
-                    ${b.status}
+                <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm bg-gray-100 text-gray-700">
+                    Pending
                 </span>
             </td>
             <td class="p-4 text-center">
-                <button onclick="openModal(${b.Bill_id}, '${b.status}')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
+                <button onclick="openModal(${b.id}, 'Pending')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
                     <i class="fas fa-edit"></i> เปลี่ยนสถานะ
                 </button>
             </td>
@@ -463,19 +475,16 @@ async function sendPost(endpoint, body) {
         
         if (!res.ok) {
             const err = await res.json();
-            // ✅ แก้ตรงนี้ เพื่อให้มันแปลง Error ของ FastAPI มาเป็นข้อความให้อ่านง่ายๆ
             const errorMsg = JSON.stringify(err.detail || err, null, 2);
             Swal.fire({
                 icon: 'error',
                 title: '❌ เกิดข้อผิดพลาด',
-                // ใช้ html และ <pre> เพื่อให้เว้นบรรทัด JSON สวยงาม
                 html: `<pre style="text-align: left; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 14px;">${errorMsg}</pre>`,
                 confirmButtonColor: '#ef4444',
                 confirmButtonText: 'ตกลง'
             });
             throw new Error(errorMsg);
         }
-        // ถ้าสำเร็จ ให้เคลียร์ฟอร์ม
         document.querySelectorAll('input').forEach(i => i.value = '');
     } catch(e) { 
         console.error(e);
@@ -526,7 +535,6 @@ async function loadCEOCharts() {
     if(chart1) chart1.destroy();
     if(chart2) chart2.destroy();
 
-    // Chart 1: Vehicles
     const ctx1 = document.getElementById('vehicleChart').getContext('2d');
     chart1 = new Chart(ctx1, {
         type: 'doughnut',
@@ -534,12 +542,11 @@ async function loadCEOCharts() {
             labels: Object.keys(data.vehicles),
             datasets: [{
                 data: Object.values(data.vehicles),
-                backgroundColor: ['#4ade80', '#ef4444', '#fbbf24'] // Green, Red, Yellow
+                backgroundColor: ['#4ade80', '#ef4444', '#fbbf24'] 
             }]
         }
     });
 
-    // Chart 2: Employees
     const ctx2 = document.getElementById('employeeChart').getContext('2d');
     chart2 = new Chart(ctx2, {
         type: 'bar',
@@ -556,38 +563,28 @@ async function loadCEOCharts() {
 }
 
 async function deleteData(type, id) {
-    // 1. เรียกหน้าต่างยืนยัน SweetAlert2
     const result = await Swal.fire({
         title: 'คุณแน่ใจหรือไม่?',
         text: "ข้อมูลนี้จะถูกลบอย่างถาวรและกู้คืนไม่ได้!",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#ef4444', // สีแดง
-        cancelButtonColor: '#9ca3af',  // สีเทา
+        confirmButtonColor: '#ef4444', 
+        cancelButtonColor: '#9ca3af',  
         confirmButtonText: 'ใช่, ลบเลย!',
         cancelButtonText: 'ยกเลิก'
     });
 
-    // 2. ถ้าผู้ใช้กด "ใช่, ลบเลย!"
     if (result.isConfirmed) {
         try {
-            // ส่ง Request แบบ DELETE ไปที่ Backend
-            // (แก้ URL ให้ตรงกับพอร์ตที่คุณใช้ ปกติคือ 8000)
-            const response = await fetch(`http://127.0.0.1:8000/${type}/${id}`, {
+            // ✅ ใช้ API_URL แทนการระบุ 127.0.0.1 ตรงๆ 
+            const response = await fetch(`${API_URL}/${type}/${id}`, {
                 method: 'DELETE'
             });
 
             if (response.ok) {
-                // แจ้งเตือนว่าลบสำเร็จ
-                Swal.fire(
-                    'ลบสำเร็จ!',
-                    'ข้อมูลถูกลบออกจากระบบแล้ว',
-                    'success'
-                );
-                // โหลดตารางใหม่เพื่อให้ข้อมูลอัปเดต
+                Swal.fire('ลบสำเร็จ!', 'ข้อมูลถูกลบออกจากระบบแล้ว', 'success');
                 loadAdminData(type);
             } else {
-                // กรณีลบไม่ได้ (เช่น ติด Foreign Key)
                 Swal.fire('ลบไม่ได้!', 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ หรือข้อมูลนี้ถูกใช้งานอยู่', 'error');
             }
         } catch (error) {
@@ -596,87 +593,33 @@ async function deleteData(type, id) {
         }
     }
 }
-
-async function deleteData(type, id) {
-    // 1. เรียกหน้าต่างยืนยัน SweetAlert2
-    const result = await Swal.fire({
-        title: 'คุณแน่ใจหรือไม่?',
-        text: "ข้อมูลนี้จะถูกลบอย่างถาวรและกู้คืนไม่ได้!",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444', // สีแดง
-        cancelButtonColor: '#9ca3af',  // สีเทา
-        confirmButtonText: 'ใช่, ลบเลย!',
-        cancelButtonText: 'ยกเลิก'
-    });
-
-    // 2. ถ้าผู้ใช้กด "ใช่, ลบเลย!"
-    if (result.isConfirmed) {
-        try {
-            // ส่ง Request แบบ DELETE ไปที่ Backend
-            // (แก้ URL ให้ตรงกับพอร์ตที่คุณใช้ ปกติคือ 8000)
-            const response = await fetch(`http://127.0.0.1:8000/${type}/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                // แจ้งเตือนว่าลบสำเร็จ
-                Swal.fire(
-                    'ลบสำเร็จ!',
-                    'ข้อมูลถูกลบออกจากระบบแล้ว',
-                    'success'
-                );
-                // โหลดตารางใหม่เพื่อให้ข้อมูลอัปเดต
-                loadAdminData(type);
-            } else {
-                // กรณีลบไม่ได้ (เช่น ติด Foreign Key)
-                Swal.fire('ลบไม่ได้!', 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ หรือข้อมูลนี้ถูกใช้งานอยู่', 'error');
-            }
-        } catch (error) {
-            console.error(error);
-            Swal.fire('ผิดพลาด', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error');
-        }
-    }
-}
-
-// --- script.js ---
 
 // ฟังก์ชันเปิด/ปิดรหัสผ่าน
 function togglePassword() {
-    // ใช้ id ตามฟอร์มของคุณเลยครับ
     const passwordInput = document.getElementById('new_u_pass'); 
     const eyeIcon = document.getElementById('eye_icon');
 
     if (passwordInput.type === 'password') {
-        // เปลี่ยนเป็นโชว์ตัวหนังสือ
         passwordInput.type = 'text';
-        // เปลี่ยนรูปตาเป็นขีดฆ่า
         eyeIcon.classList.remove('fa-eye');
         eyeIcon.classList.add('fa-eye-slash');
     } else {
-        // เปลี่ยนกลับเป็นจุดดำๆ
         passwordInput.type = 'password';
-        // เปลี่ยนรูปตาเป็นตาปกติ
         eyeIcon.classList.remove('fa-eye-slash');
         eyeIcon.classList.add('fa-eye');
     }
 }
 
 function toggleLoginPassword() {
-    // ใช้ id ตามฟอร์มของคุณเลยครับ
     const passwordInput = document.getElementById('password'); 
     const eyeIcon = document.getElementById('eye_icon');
 
     if (passwordInput.type === 'password') {
-        // เปลี่ยนเป็นโชว์ตัวหนังสือ
         passwordInput.type = 'text';
-        // เปลี่ยนรูปตาเป็นขีดฆ่า
         eyeIcon.classList.remove('fa-eye');
         eyeIcon.classList.add('fa-eye-slash');
     } else {
-        // เปลี่ยนกลับเป็นจุดดำๆ
         passwordInput.type = 'password';
-        // เปลี่ยนรูปตาเป็นตาปกติ
         eyeIcon.classList.remove('fa-eye-slash');
         eyeIcon.classList.add('fa-eye');
     }
@@ -702,8 +645,6 @@ async function changeVehicleStatus(vehicleId, newStatus) {
         }
 
         Swal.fire('สำเร็จ', 'อัพเดตสถานะรถเรียบร้อยแล้ว', 'success');
-        
-        // รีเฟรชตารางรถใหม่
         loadAdminData('vehicles'); 
         
     } catch (e) {
@@ -711,3 +652,65 @@ async function changeVehicleStatus(vehicleId, newStatus) {
     }
 }
 
+// ฟังก์ชันสำหรับดึงข้อมูล View มาแสดง (สำหรับ CEO เท่านั้น)
+async function fetchAndDisplayView() {
+    const viewName = document.getElementById('view-selector').value;
+    const token = localStorage.getItem('token');
+    
+    try {
+        const res = await fetch(`${API_URL}/api/views/${viewName}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลรายงานได้");
+        
+        const data = await res.json();
+        
+        const thead = document.getElementById('view-table-head');
+        const tbody = document.getElementById('view-table-body');
+        
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td class="p-4 text-center text-gray-500">ไม่มีข้อมูลในรายงานนี้</td></tr>';
+            return;
+        }
+
+        // 1. สร้างหัวตาราง (ดึงชื่อ Key จาก Object ตัวแรก)
+        const columns = Object.keys(data[0]);
+        let thHtml = '<tr>';
+        columns.forEach(col => {
+            // ปรับชื่อคอลัมน์ให้ดูสวยขึ้น (เอา _ ออก และพิมพ์ใหญ่ตัวแรก)
+            let niceName = col.replace(/_/g, ' ').toUpperCase();
+            thHtml += `<th class="p-3 border-b">${niceName}</th>`;
+        });
+        thHtml += '</tr>';
+        thead.innerHTML = thHtml;
+
+        // 2. สร้างแถวข้อมูล
+        let tbHtml = '';
+        data.forEach((row, index) => {
+            // สลับสีแถว (Zebra Striping)
+            const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            tbHtml += `<tr class="${bgClass} hover:bg-blue-50 transition border-b">`;
+            
+            columns.forEach(col => {
+                let cellValue = row[col];
+                // เช็คค่า Null หรือ Undefined
+                if (cellValue === null || cellValue === undefined) cellValue = '-';
+                // ถ้าเป็นตัวเลข ให้ใส่ลูกน้ำ (Format Number)
+                if (typeof cellValue === 'number') {
+                    cellValue = cellValue.toLocaleString('th-TH');
+                }
+                tbHtml += `<td class="p-3">${cellValue}</td>`;
+            });
+            tbHtml += '</tr>';
+        });
+        tbody.innerHTML = tbHtml;
+
+    } catch (error) {
+        console.error(error);
+        document.getElementById('view-table-body').innerHTML = `<tr><td class="p-4 text-center text-red-500"><i class="fas fa-exclamation-triangle"></i> เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>`;
+    }
+}
