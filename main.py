@@ -1,506 +1,186 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-import uuid
-from datetime import datetime
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from jose import jwt
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-import pytz
-from passlib.context import CryptContext 
 
-
-
-# Import ไฟล์ภายในโปรเจค
 import models
-from models import User
 import schemas
-from database import SessionLocal, engine
-from deps import get_current_user, check_ceo_role , check_employee_role , check_admin_role
-import deps 
-from schemas import UserShow
-from deps import SECRET_KEY, ALGORITHM
+from database import engine, get_db
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def reset_daily_employee_status():
-    """
-    ฟังก์ชันนี้จะทำงานทุก 7.00 น.
-    เพื่อรีเซ็ตสถานะพนักงานทุกคน (เช่น ให้กลับมาเป็น Active เพื่อรอเช็คชื่อใหม่)
-    """
-    print(f"⏰ [7:00 AM] เริ่มทำการรีเซ็ตสถานะพนักงาน... ({datetime.now()})")
-    
-    # ต้องสร้าง DB Session เองเพราะไม่ได้ผ่าน API Request
-    db = SessionLocal() 
-    try:
-        # ดึงพนักงานทุกคนมา
-        employees = db.query(models.Employee).all()
-        for emp in employees:
-            # ตัวอย่าง: รีเซ็ตสถานะเป็น "Active" (หรือสถานะอื่นตามต้องการ เช่น "Wait Check-in")
-            emp.Status = models.EmployeeStatus.ACTIVE 
-            
-        db.commit()
-        print("✅ รีเซ็ตสถานะพนักงานเรียบร้อยแล้ว")
-    except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการรีเซ็ต: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-# --- ตั้งค่า Scheduler (วางไว้ก่อน app = FastAPI...) ---
-scheduler = BackgroundScheduler()
-# ตั้งเวลา 7:00 น. ทุกวัน (timezone Bangkok/Asia)
-trigger = CronTrigger(hour=7, minute=0, timezone=pytz.timezone('Asia/Bangkok'))
-scheduler.add_job(reset_daily_employee_status, trigger)
-scheduler.start()
-
-
-# สร้าง Tables ใน Database (ถ้ารันครั้งแรก)
+# สั่งให้สร้างตารางใน Database อัตโนมัติ
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Delivery Management API")
+app = FastAPI(title="WMS System API (Refactored)")
 
-# Dependency สำหรับเชื่อมต่อ DB
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+# CORS ตั้งค่าให้หน้าบ้านเรียก API ได้
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # หรือระบุเป็น ["http://127.0.0.1:5500"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+from sqlalchemy import text
+from fastapi import HTTPException
+
+# API ดึงข้อมูลจาก View (Dynamic Endpoint)
+@app.get("/api/views/{view_name}")
+def get_view_data(view_name: str, db: Session = Depends(get_db)):
+    # ป้องกัน SQL Injection โดยเช็คว่าชื่อ View อยู่ในรายการที่อนุญาตหรือไม่
+    allowed_views = [
+        "vw_user_roles_details", "vw_warehouse_inventory_value",
+        "vw_delivery_bill_info", "vw_bill_total_value",
+        "vw_employee_delivery_stats", "vw_latest_delivery_status",
+        "vw_vehicle_usage_summary", "vw_customer_order_summary",
+        "vw_low_stock_products", "vw_master_delivery_dashboard"
+    ]
+    
+    if view_name not in allowed_views:
+        raise HTTPException(status_code=400, detail="ไม่พบ View ที่ต้องการ")
+    
+    # รัน SQL ดึงข้อมูลจาก View
+    query = text(f"SELECT * FROM {view_name}")
+    result = db.execute(query).mappings().all()
+    
+    return result
+
 @app.get("/")
-def Nothing():
-    return ('Nothing , everything is nothing')
+def read_root():
+    return {"message": "✅ API is running with the new schema!"}
 
+# --- 1. Roles ---
+@app.get("/roles", response_model=list[schemas.RoleResponse])
+def get_roles(db: Session = Depends(get_db)):
+    return db.query(models.Role).all()
 
+@app.post("/roles", response_model=schemas.RoleResponse)
+def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db)):
+    db_role = models.Role(**role.dict())
+    db.add(db_role)
+    db.commit()
+    db.refresh(db_role)
+    return db_role
 
-#        _  _     _  _         _____     ____     _____   _______ 
-#      _| || |_ _| || |_      |  __ \   / __ \   / ____| |__   __|
-#     |_  __  _|_  __  _|     | |__) | | |  | | | (___      | |   
-#      _| || |_ _| || |_      |  ___/  | |  | |  \___ \     | |   
-#     |_  __  _|_  __  _|     | |      | |__| |  ____) |    | |   
-#       |_||_|   |_||_|       |_|       \____/  |_____/     |_|   
-#                                                                 
-#                                                                 
+# --- 2. Employees ---
+@app.get("/employees", response_model=list[schemas.EmployeeResponse])
+def get_employees(db: Session = Depends(get_db)):
+    return db.query(models.Employee).all()
 
-@app.post("/employees/", response_model=schemas.Employee)
+@app.post("/employees", response_model=schemas.EmployeeResponse)
 def create_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    
-    # สร้าง Object Employee ตาม models.py
-    new_emp = models.Employee(
-        Employee_name=emp.Employee_name,
-        Phone=emp.Phone,
-        Status=emp.Status
-        # ถ้า Model มี Status ให้ uncomment บรรทัดล่าง
-        # ,  
-    )
-    
-    db.add(new_emp)
+    db_emp = models.Employee(**emp.dict())
+    db.add(db_emp)
     db.commit()
-    db.refresh(new_emp)
-    
-    return new_emp
+    db.refresh(db_emp)
+    return db_emp
 
+# --- 3. Customers ---
+@app.get("/customers", response_model=list[schemas.CustomerResponse])
+def get_customers(db: Session = Depends(get_db)):
+    return db.query(models.Customer).all()
 
-@app.post("/vehicles", response_model=schemas.Vehicle)
-def create_vehicle(veh: schemas.VehicleCreate, db: Session = Depends(get_db)):
-    new_veh = models.Vehicle(
-        License_plate=veh.License_plate,
-        Status=veh.Status,
-        Description=veh.Description
-    )
-    db.add(new_veh)
+@app.post("/customers", response_model=schemas.CustomerResponse)
+def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db)):
+    db_customer = models.Customer(**customer.dict())
+    db.add(db_customer)
     db.commit()
-    db.refresh(new_veh)
-    return new_veh
+    db.refresh(db_customer)
+    return db_customer
 
+# --- 4. Vehicles ---
+@app.get("/vehicles", response_model=list[schemas.VehicleResponse])
+def get_vehicles(db: Session = Depends(get_db)):
+    return db.query(models.Vehicle).all()
 
-@app.post("/products/", response_model=schemas.Product)
-def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db) ):
-    db_product = models.Product(**product.model_dump())
+@app.post("/vehicles", response_model=schemas.VehicleResponse)
+def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+    db_vehicle = models.Vehicle(**vehicle.dict())
+    db.add(db_vehicle)
+    db.commit()
+    db.refresh(db_vehicle)
+    return db_vehicle
+
+# --- 5. Warehouses ---
+@app.get("/warehouses", response_model=list[schemas.WarehouseResponse])
+def get_warehouses(db: Session = Depends(get_db)):
+    return db.query(models.Warehouse).all()
+
+@app.post("/warehouses", response_model=schemas.WarehouseResponse)
+def create_warehouse(warehouse: schemas.WarehouseCreate, db: Session = Depends(get_db)):
+    db_warehouse = models.Warehouse(**warehouse.dict())
+    db.add(db_warehouse)
+    db.commit()
+    db.refresh(db_warehouse)
+    return db_warehouse
+
+# --- 6. Products ---
+@app.get("/products", response_model=list[schemas.ProductResponse])
+def get_products(db: Session = Depends(get_db)):
+    return db.query(models.Product).all()
+
+@app.post("/products", response_model=schemas.ProductResponse)
+def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
+    db_product = models.Product(**product.dict())
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
     return db_product
 
+# --- 7. Users ---
+@app.get("/users", response_model=list[schemas.UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    return db.query(models.User).all()
 
-
-@app.post("/delivery-bills/", response_model=schemas.DeliveryBill)
-def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db)):
-        # 1. สร้างตัวบิลหลัก
-    # ใช้ exclude={'items'} เพราะเราจะแยกสร้าง item ต่างหาก
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.Vehicle_id == models.DeliveryBill.Vehicle_Vehicle_id).first()
-    if vehicle:
-        # เปลี่ยนสถานะเป็น "In Use" หรือ "กำลังใช้งาน"
-        vehicle.status = "In Use"
-
-    bill_data = bill.model_dump(exclude={'items'})
-    db_bill = models.DeliveryBill(**bill_data)
-    
-    db.add(db_bill)
-    db.commit() # Commit เพื่อให้ได้ Bill ID ใน DB ก่อน (กรณี Auto Increment) แต่เคสนี้เราระบุ ID เองก็ไม่เป็นไร
-    # 2. สร้างรายการสินค้า (Bill Items) ถ้ามีส่งมาด้วย
-    if bill.items:
-        for item in bill.items:
-            new_item = models.BillItem(
-                # ใช้ Product_id และ Quantity ที่ส่งมา
-                Product_Product_id=item.Product_Product_id,
-                Quantity=item.Quantity,
-                # ผูกกับบิลที่เพิ่งสร้าง
-                Delivery_bill_bill_id=db_bill.bill_id 
-            )
-            db.add(new_item)
-        db.commit()
-
-    db.refresh(db_bill)
-    return db_bill
-
-
-@app.post("/time-logs/", response_model=schemas.DeliveryTimeLog)
-def add_time_log(log_data: schemas.DeliveryTimeLogCreate, db: Session = Depends(get_db)):
-    """
-    Employee คนไหนก็สามารถยิง API นี้เพื่อลงเวลาให้บิลไหนก็ได้
-    """
-    # 1. เช็คว่าบิลมีจริงไหม
-    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == log_data.bill_id).first()
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    # 2. สร้าง Time Log (Generate ID เอง)
-    new_log = models.DeliveryTimeLog(
-        Time_log_id=str(uuid.uuid4()), # สร้าง UUID string
-        Event_time=log_data.Event_time,
-        Timestamp=datetime.now(), # เวลาปัจจุบันของ Server
-        Remark=log_data.Remark,
-        Delivery_bill_bill_id=log_data.bill_id
-    )
-    
-    db.add(new_log)
-    db.commit()
-    db.refresh(new_log)
-    
-    return new_log
-
-
-@app.post("/roles/", response_model=schemas.Role)
-def create_role(role: schemas.RoleCreate, db: Session = Depends(get_db) ):
-    # เช็คว่ามี ID นี้หรือยัง
-    db_role = db.query(models.Role).filter(models.Role.role_id == role.role_id).first()
-    if db_role:
-        raise HTTPException(status_code=400, detail="Role ID already exists")
-    
-    # สร้าง Role ใหม่
-    new_role = models.Role(
-        role_id=role.role_id,
-        role_name=role.role_name,
-        description=role.description
-    )
-    db.add(new_role)
-    db.commit()
-    db.refresh(new_role)
-    return new_role
-
-
-@app.post("/users/", response_model=schemas.User) # ใช้ UserShow เพื่อไม่ให้ส่ง Password กลับ
+@app.post("/users", response_model=schemas.UserResponse)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    
-    # 1. เช็คว่า Username ซ้ำไหม
-    existing_user = db.query(models.User).filter(models.User.Username == user.Username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username นี้มีผู้ใช้งานแล้ว")
-
-    # 2. เช็คว่า Employee ID มีอยู่จริงไหม (กัน Error 500)
-    emp = db.query(models.Employee).filter(models.Employee.Employee_id == user.Employee_Employee_id).first()
-    if not emp:
-        raise HTTPException(status_code=404, detail=f"ไม่พบพนักงานรหัส {user.Employee_Employee_id} ในระบบ")
-
-    # 3. สร้าง User (ต้อง Map ชื่อตัวแปรให้ตรงกับ models.py)
-    # Password ต้อง Hash ก่อนบันทึก ไม่งั้น Login ไม่ได้
-    hashed_password = pwd_context.hash(user.Password_hash)
-
-    new_user = models.User(
-        Username=user.Username,
-        status=user.status,
-        Password_hash=user.Password_hash, # (อย่าลืมเข้ารหัสก่อนเซฟจริงๆ ด้วยนะครับ)
-        Employee_Employee_id=user.Employee_Employee_id,
-        Role_role_id=user.Role_role_id
+    # 💡 หมายเหตุ: ระบบจริงควรนำ user.password ไปเข้ารหัส (Hash) ก่อนบันทึกลง password_hash
+    db_user = models.User(
+        username=user.username,
+        password_hash=user.password, # เก็บชั่วคราวแบบไม่เข้ารหัสไปก่อน
+        role_id=user.role_id,
+        employee_id=user.employee_id
     )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
-    try:
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+# --- 8. Delivery Bills ---
+@app.get("/delivery-bills", response_model=list[schemas.DeliveryBillResponse])
+def get_delivery_bills(db: Session = Depends(get_db)):
+    return db.query(models.DeliveryBill).all()
 
-
-# main.py
-
-@app.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 1. เช็ค User / Password
-    # หมายเหตุ: ในระบบจริงควรเช็ค Password Hash แต่ตอนนี้เช็คแบบดิบๆ ไปก่อน
-    user = db.query(models.User).filter(models.User.Username == form_data.username).first()
-
-    if not user: # ถ้าไม่เจอ User
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-
-    # (ถ้ามีเช็ค password ให้ใส่ตรงนี้)
-    if user.Password_hash != form_data.password:
-        raise HTTPException(status_code=400, detail="รหัสผ่านไม่ถูกต้อง")
-
-    # 2. สร้าง JWT Token (นี่คือส่วนสำคัญที่หายไป!)
-    data_to_encode = {
-        "sub": user.Username,  # sub คือ Subject (เจ้าของ Token)
-        "role": str(user.Role_role_id) # ใส่ Role ไปด้วยก็ได้
-    }
-    # สร้าง Token โดยใช้กุญแจเดียวกับใน deps.py
-    encoded_jwt = jwt.encode(data_to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-    # 3. ส่ง Token กลับไปให้ Frontend
-    return {
-        "access_token": encoded_jwt, 
-        "token_type": "bearer",
-        "role": str(user.Role_role_id) # ส่ง Role แยกไปให้ใช้ง่ายๆ
-    }
-
-#        _  _     _  _          _____   ______   _______ 
-#      _| || |_ _| || |_       / ____| |  ____| |__   __|
-#     |_  __  _|_  __  _|     | |  __  | |__       | |   
-#      _| || |_ _| || |_      | | |_ | |  __|      | |   
-#     |_  __  _|_  __  _|     | |__| | | |____     | |   
-#       |_||_|   |_||_|        \_____| |______|    |_|   
-#                                                        
-#                                                        
-
-@app.get("/employees/", response_model=List[schemas.Employee])
-def read_employees(db: Session = Depends(get_db)):
-    return db.query(models.Employee).all()
-
-@app.get("/vehicles/", response_model=List[schemas.Vehicle])
-def read_vehicles(db: Session = Depends(get_db)):
-    return db.query(models.Vehicle).all()
-
-
-@app.get("/products/", response_model=List[schemas.Product])
-def read_products(db: Session = Depends(get_db)):
-    return db.query(models.Product).all()
-
-
-@app.get("/delivery-bills/", response_model=List[schemas.DeliveryBill])
-def read_delivery_bills(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # ดึงข้อมูลทั้งหมด (Employee เห็นทุกบิลตามที่ขอ)
-    bills = db.query(models.DeliveryBill).offset(skip).limit(limit).all()
-    return bills
-
-
-@app.get("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def read_delivery_bill_by_id(bill_id: str, db: Session = Depends(get_db)):
-    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
-    if bill is None:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    return bill
-
-
-@app.get("/roles/", response_model=list[schemas.Role])
-def read_roles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    roles = db.query(models.Role).offset(skip).limit(limit).all()
-    return roles
-
-
-@app.get("/users/", response_model=list[schemas.User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    return users
-
-@app.get("/users/me") 
-async def read_users_me(current_user: models.User = Depends(get_current_user)):
-    
-    # Mapping ชื่อ Role
-    role_name = "User"
-    if current_user.Role_role_id == 1:
-        role_name = "Admin"
-    elif current_user.Role_role_id == 2:
-        role_name = "Employee"
-    elif current_user.Role_role_id == 3:
-        role_name = "CEO"
-
-    # ส่ง JSON กลับไป
-    return {
-        "User_id": current_user.User_id,
-        "Username": current_user.Username,
-        "Role_id": current_user.Role_role_id,   # ส่งไปให้ JS เช็ค
-        "Role_role_id": current_user.Role_role_id, # ส่งเผื่อไปอีกชื่อกันพลาด
-        "Role_name": role_name,                 # ส่งชื่อไปโชว์
-        "status": current_user.status
-    }
-
-@app.get("/dashboard/stats")
-def get_dashboard_stats(db: Session = Depends(get_db)):
-    # นับจำนวนรถตามสถานะ
-    vehicles = db.query(models.Vehicle).all()
-    v_stats = {"Available": 0, "In Use": 0, "Maintenance": 0}
-    for v in vehicles:
-        # แปลง enum เป็น string เพื่อความชัวร์
-        status_str = str(v.Status.value) if hasattr(v.Status, 'value') else str(v.Status)
-        if status_str in v_stats:
-            v_stats[status_str] += 1
-
-    # นับจำนวนพนักงานตามสถานะ
-    employees = db.query(models.Employee).all()
-    e_stats = {"Active": 0, "On Leave": 0, "Holiday": 0}
-    for e in employees:
-        status_str = str(e.Status.value) if hasattr(e.Status, 'value') else str(e.Status)
-        if status_str in e_stats:
-            e_stats[status_str] += 1
-            
-    return {"vehicles": v_stats, "employees": e_stats}
-
-#        _  _     _  _         _____    _    _   _______ 
-#      _| || |_ _| || |_      |  __ \  | |  | | |__   __|
-#     |_  __  _|_  __  _|     | |__) | | |  | |    | |   
-#      _| || |_ _| || |_      |  ___/  | |  | |    | |   
-#     |_  __  _|_  __  _|     | |      | |__| |    | |   
-#       |_||_|   |_||_|       |_|       \____/     |_|   
-#                                                        
-#                                                        
-
-
-@app.put("/delivery-bills/{bill_id}", response_model=schemas.DeliveryBill)
-def update_delivery_bill(bill_id: str, bill_update: schemas.DeliveryBillUpdate, db: Session = Depends(get_db) , current_user = Depends(check_employee_role)):
-    # 1. หาบิลก่อน
-    db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.bill_id == bill_id).first()
-    if not db_bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    # 2. อัปเดตข้อมูลเฉพาะ field ที่ส่งมา (ไม่เป็น None)
-    update_data = bill_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_bill, key, value)
-
+@app.post("/delivery-bills", response_model=schemas.DeliveryBillResponse)
+def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db)):
+    db_bill = models.DeliveryBill(**bill.dict())
     db.add(db_bill)
     db.commit()
     db.refresh(db_bill)
     return db_bill
 
-@app.put("/vehicles/{vehicle_id}/status")
-async def update_vehicle_status(
-    vehicle_id: int, 
-    status_update: schemas.VehicleStatusUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user) # ดึงข้อมูลคนที่ Login อยู่
-):
-    # 1. เช็คสิทธิ์ว่าเป็น Admin หรือไม่ (สมมติ Role 1 = Admin)
-    if current_user.Role_role_id != 1:
-        raise HTTPException(status_code=403, detail="ไม่อนุญาต! ฟีเจอร์นี้สำหรับ Admin เท่านั้น")
-    
-    # 2. ค้นหารถในระบบ
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.Vehicle_id == vehicle_id).first()
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลรถคันนี้")
-        
-    # 3. อัพเดตสถานะ
-    vehicle.status = status_update.status
+# --- 9. Delivery Items ---
+@app.get("/delivery-items", response_model=list[schemas.DeliveryItemResponse])
+def get_delivery_items(db: Session = Depends(get_db)):
+    return db.query(models.DeliveryItem).all()
+
+@app.post("/delivery-items", response_model=schemas.DeliveryItemResponse)
+def create_delivery_item(item: schemas.DeliveryItemCreate, db: Session = Depends(get_db)):
+    db_item = models.DeliveryItem(**item.dict())
+    db.add(db_item)
     db.commit()
-    
-    return {"message": "อัพเดตสถานะรถเรียบร้อย", "new_status": vehicle.status}
+    db.refresh(db_item)
+    return db_item
 
+# --- 10. Delivery Logs ---
+@app.get("/delivery-logs", response_model=list[schemas.DeliveryLogResponse])
+def get_delivery_logs(db: Session = Depends(get_db)):
+    return db.query(models.DeliveryLog).all()
 
-@app.put("/delivery-bills/{bill_id}/status")
-def update_bill_status(bill_id: int, status_update: schemas.DeliveryBillUpdateStatus, db: Session = Depends(get_db), current_user = Depends(check_employee_role)):
-    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.Bill_id == bill_id).first()
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    
-    bill.status = status_update.status
-    # ถ้าส่งเสร็จ ให้ลงเวลาจบ
-    if status_update.status == models.DeliveryBillStatus.DELIVERED:
-        bill.finish_time = datetime.now()
-        
+@app.post("/delivery-logs", response_model=schemas.DeliveryLogResponse)
+def create_delivery_log(log: schemas.DeliveryLogCreate, db: Session = Depends(get_db)):
+    db_log = models.DeliveryLog(**log.dict())
+    db.add(db_log)
     db.commit()
-    db.refresh(bill)
-    return bill
-
-#        _  _     _  _         _____    ______   _        ______   _______   ______ 
-#      _| || |_ _| || |_      |  __ \  |  ____| | |      |  ____| |__   __| |  ____|
-#     |_  __  _|_  __  _|     | |  | | | |__    | |      | |__       | |    | |__   
-#      _| || |_ _| || |_      | |  | | |  __|   | |      |  __|      | |    |  __|  
-#     |_  __  _|_  __  _|     | |__| | | |____  | |____  | |____     | |    | |____ 
-#       |_||_|   |_||_|       |_____/  |______| |______| |______|    |_|    |______|
-#                                                                                   
-#                                                                                   
-
-
-@app.delete("/debug/clear-all")
-def clear_database(db: Session = Depends(get_db) , current_user = Depends(check_admin_role)):
-    try:
-        db.query(models.DeliveryTimeLog).delete()
-        db.query(models.BillItem).delete()
-        db.query(models.DeliveryBill).delete()
-        # ลบ Master data ทีหลังถ้าจำเป็น
-        # db.query(models.Employee).delete()
-        # db.query(models.Vehicle).delete()
-        db.commit()
-        return {"message": "All transaction data cleared"}
-    except Exception as e:
-        db.rollback()
-
-@app.delete("/vehicles/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
-    # 1. ค้นหารถจาก ID
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.Vehicle_id == vehicle_id).first()
-    
-    # 2. ถ้าไม่เจอให้ฟ้อง Error 404
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-    
-    # 3. ถ้าเจอ ก็สั่งลบแล้ว Commit
-    db.delete(vehicle)
-    db.commit()
-    
-    return {"message": "Vehicle deleted successfully"}
-
-@app.delete("/user/{User_id}")
-def delete_user(User_id: int, db: Session = Depends(get_db)):
-    # 1. ค้นหารถจาก ID
-    User = db.query(models.Vehicle).filter(models.User.User_id == User_id).first()
-    
-    # 2. ถ้าไม่เจอให้ฟ้อง Error 404
-    if not User:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # 3. ถ้าเจอ ก็สั่งลบแล้ว Commit
-    db.delete(User)
-    db.commit()
-    
-    return {"message": "User deleted successfully"}
-
-@app.delete("/employees/{Employee_id}")
-def delete_user(Employee_id: int, db: Session = Depends(get_db)):
-    # 1. ค้นหารถจาก ID
-    Employee = db.query(models.Vehicle).filter(models.Employee.Employee_id == Employee_id).first()
-    
-    # 2. ถ้าไม่เจอให้ฟ้อง Error 404
-    if not Employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    # 3. ถ้าเจอ ก็สั่งลบแล้ว Commit
-    db.delete(Employee)
-    db.commit()
-    
-    return {"message": "Employee deleted successfully"}
-
-
+    db.refresh(db_log)
+    return db_log
