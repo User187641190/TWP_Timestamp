@@ -1,214 +1,151 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime, date, time
-# Import Enums จาก models.py (ต้องมีไฟล์ models.py ที่ประกาศ Enum ไว้แล้วนะ)
-from models import EmployeeStatus, VehicleStatus, DeliveryBillStatus
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+from decimal import Decimal
 
-# ==========================================
-# 1. Base Schemas & Shared (พื้นฐาน)
-# ==========================================
-
-#——————————————————————————            
-# --- User / Login System ---
-#——————————————————————————            
-class UserBase(BaseModel):
-    Username: str
-    status: str | None = "Active" 
-    Password_hash: str
-    Employee_Employee_id: int 
-    Role_role_id: int
-
-class UserCreate(UserBase):
-    pass
-
-class User(UserBase):
-    User_id: int 
+# --- Configuration พื้นฐานสำหรับการแปลง SQLAlchemy Model เป็น JSON ---
+class OrmBase(BaseModel):
     class Config:
         from_attributes = True
 
-class UserShow(UserBase):
-    User_id: int
-    Employee_Employee_id: int
-    Role_role_id: int
-    Username: str
-    class Config:
-        from_attributes = True
-
-
-#——————————————————————————            
-# --- Product (สินค้า) ---
-#——————————————————————————        
-
-class ProductBase(BaseModel):
-    Product_name: str
-    Price: float
-
-class ProductCreate(ProductBase):
-    Product_id: int  # สมมติว่าเป็นรหัสสินค้า เช่น 'P-001'
-
-class Product(ProductBase):
-    Product_id: int
-    class Config:
-        from_attributes = True
-
-class ProductShow(BaseModel):
-    Product_id: int
-    Product_name: str
-    class Config:
-        from_attributes = True
-
-# ==========================================
-# 2. Helper Schemas for Nesting (ตัวช่วยแสดงผล)
-# ==========================================
-# ใช้สำหรับแสดงข้อมูลย่อในตารางอื่น เพื่อป้องกัน Loop ไม่จบสิ้น
-
-# ==========================================
-# 3. Main Entity Schemas (ข้อมูลหลัก)
-# ==========================================
-
-#——————————————————————————            
-# --- Employee ---
-#——————————————————————————            
-class EmployeeShow(BaseModel):
-    Employee_id: int
-    Employee_name: str
-    Status: EmployeeStatus
-    class Config:
-        from_attributes = True
-
-class EmployeeBase(BaseModel):
-    Employee_name: str
-    Phone: Optional[str] = None
-    Status: EmployeeStatus = EmployeeStatus.ACTIVE
-
-class EmployeeCreate(BaseModel):
-    Employee_name: str
-    Phone: str
-    Status: EmployeeStatus = EmployeeStatus.ACTIVE
-
-class Employee(EmployeeBase):
-    Employee_id: int
-    class Config:
-        from_attributes = True
-#——————————————————————————            
-# --- Vehicle ---
-#——————————————————————————            
-class VehicleBase(BaseModel):
-    License_plate: str
-    Description: Optional[str] = None
-    Status: VehicleStatus = VehicleStatus.AVAILABLE
-
-class VehicleCreate(BaseModel):
-    License_plate: str
-    Description: Optional[str] = None
-    Status: VehicleStatus = VehicleStatus.AVAILABLE
-
-class Vehicle(VehicleBase):
-    Vehicle_id: int
-    class Config:
-        from_attributes = True
-
-class VehicleShow(BaseModel):
-    Vehicle_id: int
-    license_plate: str
-    Vehicle_description: str
-    Status: VehicleStatus
-    class Config:
-        from_attributes = True
-
-class VehicleStatusUpdate(BaseModel):
-    status: str
-# ==========================================
-# 4. Transaction Schemas (รายการย่อยในบิล)
-# ==========================================
-
-#——————————————————————————            
-# --- Bill Item (รายการสินค้าในบิล) ---
-#——————————————————————————            
-class BillItemBase(BaseModel):
-    Product_id: str = Field(alias="Product_id") # แบบนี้จะส่งคำว่า Product_id ได้เลย
-    Quantity: int
-class BillItemCreate(BillItemBase):
-    pass
-
-class BillItem(BillItemBase):
-    Bill_item_id: int
-    product: Optional[ProductShow] = None # โชว์ชื่อสินค้าด้วย
-    class Config:
-        from_attributes = True
-
-#——————————————————————————            
-# --- Time Log (ประวัติเวลา) ---
-#——————————————————————————            
-class DeliveryTimeLogBase(BaseModel):
-    Event_time: str      # เช่น "10:30"
-    Remark: Optional[str] = None
-
-class DeliveryTimeLogCreate(DeliveryTimeLogBase):
-    bill_id: str # ต้องระบุว่าจะลงเวลาให้บิลไหน
-
-class DeliveryTimeLog(DeliveryTimeLogBase):
-    Time_log_id: str
-    Timestamp: Optional[datetime]
-    class Config:
-        from_attributes = True
-
-class DeliveryBillUpdateStatus(BaseModel):
-    status: DeliveryBillStatus
-# ==========================================
-# 5. Delivery Bill (พระเอกของเรา)
-# ==========================================
-
-#——————————————————————————            
-# --- Base ---
-#——————————————————————————            
-class DeliveryBillBase(BaseModel):
-    Bill_id: int
-    delivery_date: Optional[date] = None
-    status: DeliveryBillStatus = DeliveryBillStatus.AWAIT
-    Receiver_name : str     #Name
-    Receiver_phone : str
-    start_time : time    #011-111-1111
-    Employee_Employee_id: int   #1,2,3 etc.
-    Vehicle_Vehicle_id: int #1,2,3 etc.
-
-class DeliveryBillCreate(DeliveryBillBase):
-    # สามารถรับรายการสินค้าพร้อมตอนสร้างบิลได้เลย (Optional)
-    items: Optional[List[BillItemCreate]] = []
-
-class DeliveryBillUpdate(BaseModel):
-    start_time: Optional[datetime] = None
-    arrive_time: Optional[datetime] = None
-    finish_time: Optional[datetime] = None
-    status: Optional[DeliveryBillStatus] = None
-    Employee_Employee_id: Optional[int] = None
-    Vehicle_Vehicle_id: Optional[int] = None
-
-class DeliveryBill(DeliveryBillBase):
-    start_time: Optional[datetime] = None
-    arrive_time: Optional[datetime] = None
-    finish_time: Optional[datetime] = None
-
-    # Nested Relations: ดึงข้อมูลลูกมาโชว์
-    employee: Optional[EmployeeShow] = None
-    vehicle: Optional[VehicleShow] = None
-    items: List[BillItem] = []           # โชว์รายการสินค้า
-    time_logs: List[DeliveryTimeLog] = [] # โชว์ประวัติเวลา
-
-    class Config:
-        from_attributes = True
-
-#——————————————————————————            
-# - - - Roles - - - 
-#——————————————————————————            
+# =========================
+# 1. Roles
+# =========================
 class RoleBase(BaseModel):
-    role_id: int
-    role_name: str
-    description: str | None = None
+    name: str
 
 class RoleCreate(RoleBase):
     pass
 
-class Role(RoleBase):
-    class Config:
-        from_attributes = True
+class RoleResponse(RoleBase, OrmBase):
+    id: int
+
+# =========================
+# 2. Employees
+# =========================
+class EmployeeBase(BaseModel):
+    name: str
+    work_status: Optional[str] = None
+
+class EmployeeCreate(EmployeeBase):
+    pass
+
+class EmployeeResponse(EmployeeBase, OrmBase):
+    id: int
+
+# =========================
+# 3. Customers
+# =========================
+class CustomerBase(BaseModel):
+    name: str
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
+
+class CustomerCreate(CustomerBase):
+    pass
+
+class CustomerResponse(CustomerBase, OrmBase):
+    id: int
+
+# =========================
+# 4. Vehicles
+# =========================
+class VehicleBase(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class VehicleCreate(VehicleBase):
+    pass
+
+class VehicleResponse(VehicleBase, OrmBase):
+    id: int
+
+# =========================
+# 5. Warehouses
+# =========================
+class WarehouseBase(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    contact_number: Optional[str] = None
+
+class WarehouseCreate(WarehouseBase):
+    pass
+
+class WarehouseResponse(WarehouseBase, OrmBase):
+    id: int
+
+# =========================
+# 6. Products
+# =========================
+class ProductBase(BaseModel):
+    name: str
+    unit_price: Decimal
+    stock_qty: int
+    warehouse_id: Optional[int] = None
+
+class ProductCreate(ProductBase):
+    pass
+
+class ProductResponse(ProductBase, OrmBase):
+    id: int
+
+# =========================
+# 7. Users
+# =========================
+class UserCreate(BaseModel):
+    username: str
+    password: str # รับรหัสผ่านจากหน้าบ้าน
+    role_id: Optional[int] = None
+    employee_id: Optional[int] = None
+
+class UserResponse(OrmBase):
+    id: int
+    username: str
+    role_id: Optional[int]
+    employee_id: Optional[int]
+    # ไม่ส่ง password กลับ
+
+# =========================
+# 8. Delivery Bills
+# =========================
+class DeliveryBillBase(BaseModel):
+    customer_id: Optional[int] = None
+    employee_id: Optional[int] = None
+    vehicle_id: Optional[int] = None
+    destination_address: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_phone: Optional[str] = None
+
+class DeliveryBillCreate(DeliveryBillBase):
+    pass
+
+class DeliveryBillResponse(DeliveryBillBase, OrmBase):
+    id: int
+
+# =========================
+# 9. Delivery Items
+# =========================
+class DeliveryItemBase(BaseModel):
+    bill_id: Optional[int] = None
+    product_id: Optional[int] = None
+    quantity: Optional[int] = None
+
+class DeliveryItemCreate(DeliveryItemBase):
+    pass
+
+class DeliveryItemResponse(DeliveryItemBase, OrmBase):
+    id: int
+
+# =========================
+# 10. Delivery Logs
+# =========================
+class DeliveryLogBase(BaseModel):
+    bill_id: Optional[int] = None
+    status_type: Optional[str] = None
+    logged_at: Optional[datetime] = None
+
+class DeliveryLogCreate(DeliveryLogBase):
+    pass
+
+class DeliveryLogResponse(DeliveryLogBase, OrmBase):
+    id: int
