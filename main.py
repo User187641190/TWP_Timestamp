@@ -13,15 +13,17 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 
+models.Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="WMS System API (Refactored)")
-# CORS ตั้งค่าให้หน้าบ้านเรียก API ได้
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
+
 
 SECRET_KEY = "YOUR_SUPER_SECRET_KEY_OAT" # ในระบบจริงควรใช้รหัสที่ซับซ้อนกว่านี้
 ALGORITHM = "HS256"
@@ -236,6 +238,32 @@ def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends
     db.commit()
     db.refresh(db_bill)
     return db_bill
+
+
+@app.put("/delivery-bills/{bill_id}/status" , response_model=schemas.DeliveryBillResponse)
+def update_delivery_status(bill_id: int, payload: dict, db: Session = Depends(get_db)):
+    try:
+        # ดึงบิลที่ต้องการอัปเดตจาก Database
+        db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.id == bill_id).first()
+        
+        if not db_bill:
+            raise HTTPException(status_code=404, detail="ไม่พบบิลที่ระบุ")
+        
+        # ดึงค่าสถานะที่ส่งมาจาก Frontend (เช่น Await, Pending, Delivered)
+        new_status = payload.get("status")
+        
+        if not new_status:
+            raise HTTPException(status_code=400, detail="กรุณาส่งค่า status มาด้วย")
+        
+        # อัปเดตสถานะใน Database
+        db_bill.status = new_status
+        db.commit()
+        db.refresh(db_bill)
+        
+        return db_bill  
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+    
 
 # --- 9. Delivery Items ---
 @app.get("/delivery-items", response_model=list[schemas.DeliveryItemResponse])

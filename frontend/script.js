@@ -133,6 +133,8 @@ function showPage(pageId) {
     if(pageId === 'admin-emp') loadAdminData('employees');
     if(pageId === 'admin-vehicle') loadAdminData('vehicles');
     if(pageId === 'admin-user') loadAdminData('users');
+    if(pageId === 'admin-product') loadAdminData('products');
+
     if(pageId === 'emp-list-bill') loadBills();
 }
 
@@ -141,8 +143,11 @@ async function loadAdminData(type) {
     const token = localStorage.getItem('token');
     try {
         const res = await fetch(`${API_URL}/${type}/`, { headers: {'Authorization': `Bearer ${token}`} });
-        if(!res.ok) return;
+        if(!res.ok) {console.error(`ไม่สามารถโหลดข้อมูล ${type} ได้`);
+            return;
+        }
         const data = await res.json();
+        console.log(`[DEBUG] ข้อมูล ${type} ที่ได้จาก API:`, data);
         
         let html = '';
         if(type === 'employees') {
@@ -203,6 +208,37 @@ async function loadAdminData(type) {
                     </td>
                 </tr>`).join('');
             document.getElementById('table-users').innerHTML = html;
+        }
+        else if(type === 'products') {
+            if (data.length === 0) {
+                document.getElementById('grid-products').innerHTML = `<p class="col-span-full text-center text-gray-500 py-8">ยังไม่มีข้อมูลสินค้าในระบบ</p>`;
+                return;
+            }
+
+            html = data.map(p => {
+                // 🚨 แก้จุดที่ 2: แปลงค่าเป็น Number ป้องกัน Error กรณี Database ส่งค่า Null มา
+                const price = Number(p.unit_price || 0);
+                const qty = Number(p.stock_qty || 0);
+                const name = p.name || 'ไม่ได้ระบุชื่อสินค้า';
+
+                return `
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="p-4 font-mono text-gray-500">${p.id}</td>
+                    <td class="p-4 font-bold text-gray-800">${name}</td>
+                    <td class="p-4 text-blue-600 font-medium">${price.toLocaleString('th-TH')} ฿</td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded text-xs font-bold ${qty < 100 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
+                            ${qty.toLocaleString('th-TH')} ชิ้น
+                        </span>
+                    </td>
+                    <td class="p-4 text-right">
+                        <button onclick="deleteData('products', ${p.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm shadow-sm transition">
+                            <i class="fas fa-trash"></i> ลบ
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            document.getElementById('table-products').innerHTML = html;
         }
 
     } catch(e) { console.error("Load Error:", e); }
@@ -439,28 +475,47 @@ async function createBill(e) {
 }
 
 async function loadBills() {
+    console.log("กำลังดึงข้อมูลบิลจากหลังบ้าน...");
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_URL}/delivery-bills/`, { headers: {'Authorization': `Bearer ${token}`} });
-    const bills = await res.json();
     
-    const html = bills.map(b => `
-        <tr class="border-b hover:bg-gray-50 transition">
-            <td class="p-4 font-mono text-sm text-gray-500">#${b.id}</td>
-            <td class="p-4 font-medium">${b.recipient_name}</td>
-            <td class="p-4 text-gray-500">${b.recipient_phone}</td>
-            <td class="p-4">
-                <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm bg-gray-100 text-gray-700">
-                    Pending
-                </span>
-            </td>
-            <td class="p-4 text-center">
-                <button onclick="openModal(${b.id}, 'Pending')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
-                    <i class="fas fa-edit"></i> เปลี่ยนสถานะ
-                </button>
-            </td>
-        </tr>
-    `).join('');
-    document.getElementById('billTableBody').innerHTML = html;
+    try {
+        const res = await fetch(`${API_URL}/delivery-bills`, { 
+            headers: {'Authorization': `Bearer ${token}`} 
+        });
+        
+        const bills = await res.json();
+        console.log("ได้ข้อมูลบิลมาแล้ว:", bills);
+
+        if (bills.length === 0) {
+            document.getElementById('billTableBody').innerHTML = `
+                <tr><td colspan="5" class="p-8 text-center text-gray-500">ไม่มีรายการส่งของในขณะนี้</td></tr>
+            `;
+            return;
+        }
+        
+        // 🚨 แก้ชื่อตัวแปรตรงนี้ให้ตรงกับ Database ใหม่ (id, recipient_name, recipient_phone)
+        const html = bills.map(b => `
+            <tr class="border-b hover:bg-gray-50 transition">
+                <td class="p-4 font-mono text-sm text-gray-500">#${b.id}</td>
+                <td class="p-4 font-medium">${b.recipient_name || '-'}</td>
+                <td class="p-4 text-gray-500">${b.recipient_phone || '-'}</td>
+                <td class="p-4">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm bg-yellow-100 text-yellow-700">
+                        Pending
+                    </span>
+                </td>
+                <td class="p-4 text-center">
+                    <button onclick="openModal(${b.id}, 'Pending')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
+                        <i class="fas fa-edit"></i> เปลี่ยนสถานะ
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        document.getElementById('billTableBody').innerHTML = html;
+        
+    } catch(err) {
+        console.error("เกิดข้อผิดพลาดในการโหลดบิล:", err); 
+    }
 }
 
 // ---- 6. HELPERS ----
@@ -526,40 +581,89 @@ async function saveStatus() {
 }
 
 // ---- 7. CEO CHARTS ----
-let chart1, chart2;
+let invChart, custChart; // เก็บตัวแปรกราฟไว้เพื่อทำลาย (destroy) ก่อนวาดใหม่
+
 async function loadCEOCharts() {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_URL}/dashboard/stats`, { headers: {'Authorization': `Bearer ${token}`} });
-    const data = await res.json();
+    const headers = { 'Authorization': `Bearer ${token}` };
 
-    if(chart1) chart1.destroy();
-    if(chart2) chart2.destroy();
+    try {
+        // ยิง API ดึงข้อมูลจาก View พร้อมกัน 2 ตัว
+        const [resInv, resCust] = await Promise.all([
+            fetch(`${API_URL}/api/views/vw_warehouse_inventory_value`, { headers }),
+            fetch(`${API_URL}/api/views/vw_customer_order_summary`, { headers })
+        ]);
 
-    const ctx1 = document.getElementById('vehicleChart').getContext('2d');
-    chart1 = new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(data.vehicles),
-            datasets: [{
-                data: Object.values(data.vehicles),
-                backgroundColor: ['#4ade80', '#ef4444', '#fbbf24'] 
-            }]
-        }
-    });
+        if (!resInv.ok || !resCust.ok) throw new Error("โหลดข้อมูลกราฟไม่สำเร็จ");
 
-    const ctx2 = document.getElementById('employeeChart').getContext('2d');
-    chart2 = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: Object.keys(data.employees),
-            datasets: [{
-                label: 'จำนวนพนักงาน',
-                data: Object.values(data.employees),
-                backgroundColor: '#60a5fa'
-            }]
-        },
-        options: { scales: { y: { beginAtZero: true } } }
-    });
+        const dataInv = await resInv.json();
+        const dataCust = await resCust.json();
+
+        // ==========================================
+        // 📊 กราฟที่ 1: มูลค่าคงคลัง (Doughnut Chart)
+        // ==========================================
+        const invLabels = dataInv.map(d => d.warehouse_name);
+        const invValues = dataInv.map(d => d.total_inventory_value);
+
+        if (invChart) invChart.destroy(); // ล้างกราฟเก่าก่อน
+        const ctx1 = document.getElementById('inventoryChart').getContext('2d');
+        invChart = new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: invLabels,
+                datasets: [{
+                    data: invValues,
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        // ==========================================
+        // 📊 กราฟที่ 2: ลูกค้ายอดสั่งซื้อสูงสุด (Horizontal Bar Chart)
+        // ==========================================
+        // นำข้อมูลลูกค้ามาเรียงลำดับ (Sort) จากยอดซื้อมากไปน้อย แล้วตัดเอาแค่ 5 อันดับแรก
+
+        const sortedCust = dataCust
+            .sort((a, b) => b.lifetime_spent - a.lifetime_spent)
+            .slice(0, 5); 
+
+        const custLabels = sortedCust.map(d => d.customer_name);
+        const custValues = sortedCust.map(d => d.lifetime_spent);
+
+        if (custChart) custChart.destroy(); // ล้างกราฟเก่าก่อน
+        const ctx2 = document.getElementById('customerChart').getContext('2d');
+        custChart = new Chart(ctx2, {
+            type: 'bar', // ใช้กราฟแท่ง
+            data: {
+                labels: custLabels,
+                datasets: [{
+                    label: 'ยอดใช้จ่ายสะสม (บาท)',
+                    data: custValues,
+                    backgroundColor: '#8b5cf6',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y', // เปลี่ยนกราฟแท่งเป็นแนวนอน จะได้อ่านชื่อลูกค้าง่ายๆ
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false } // ซ่อน Legend เพราะมีแค่แท่งสีเดียว
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Chart Error:", error);
+    }
 }
 
 async function deleteData(type, id) {

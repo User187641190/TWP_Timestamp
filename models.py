@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DECIMAL, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DECIMAL, DateTime , create_engine
 from sqlalchemy.orm import relationship
 from database import Base # เช็คให้ชัวร์ว่า import Base มาจากไฟล์ database.py ของคุณนะครับ
 
