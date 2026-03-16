@@ -229,7 +229,20 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 # --- 8. Delivery Bills ---
 @app.get("/delivery-bills", response_model=list[schemas.DeliveryBillResponse])
 def get_delivery_bills(db: Session = Depends(get_db)):
-    return db.query(models.DeliveryBill).all()
+    # 1. ดึงบิลทั้งหมดมาก่อน
+    bills = db.query(models.DeliveryBill).all()
+    
+    # 2. วนลูปเพื่อหา status ล่าสุดมาแปะใส่แต่ละบิล
+    for bill in bills:
+        latest_log = db.query(models.DeliveryLog).filter(
+            models.DeliveryLog.bill_id == bill.id
+        ).order_by(models.DeliveryLog.id.desc()).first()
+        
+        # 🚨 ยัดค่า status ใส่ object ตรงๆ เลย (เดี๋ยว Schema จะดูดค่านี้ไปเอง)
+        bill.status = latest_log.status_type if latest_log else "Pending"
+        
+    # 3. โยน list ของ bills กลับไปได้เลย ไม่ต้องสร้าง Dictionary แล้ว!
+    return bills
 
 @app.post("/delivery-bills", response_model=schemas.DeliveryBillResponse)
 def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends(get_db)):
@@ -240,30 +253,30 @@ def create_delivery_bill(bill: schemas.DeliveryBillCreate, db: Session = Depends
     return db_bill
 
 
-@app.put("/delivery-bills/{bill_id}/status" , response_model=schemas.DeliveryBillResponse)
-def update_delivery_status(bill_id: int, payload: dict, db: Session = Depends(get_db)):
-    try:
-        # ดึงบิลที่ต้องการอัปเดตจาก Database
-        db_bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.id == bill_id).first()
-        
-        if not db_bill:
-            raise HTTPException(status_code=404, detail="ไม่พบบิลที่ระบุ")
-        
-        # ดึงค่าสถานะที่ส่งมาจาก Frontend (เช่น Await, Pending, Delivered)
-        new_status = payload.get("status")
-        
-        if not new_status:
-            raise HTTPException(status_code=400, detail="กรุณาส่งค่า status มาด้วย")
-        
-        # อัปเดตสถานะใน Database
-        db_bill.status = new_status
-        db.commit()
-        db.refresh(db_bill)
-        
-        return db_bill  
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+@app.put("/delivery-bills/{bill_id}/status")
+def update_delivery_status(
+    bill_id: int, 
+    payload: schemas.DeliveryLogStatusUpdate, 
+    db: Session = Depends(get_db)
+):
+    # 1. เช็คก่อนว่ามีบิลหมายเลขนี้อยู่จริงๆ ไหม
+    bill = db.query(models.DeliveryBill).filter(models.DeliveryBill.id == bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="ไม่พบบิลหมายเลขนี้ในระบบ")
+
+    # 🚨 2. สร้าง Log อันใหม่ (Insert) แทนการไปแก้ของเดิม
+    new_log = models.DeliveryLog(
+        bill_id=bill_id,
+        status_type=payload.status_type,      # สถานะใหม่ที่รับมาจากหน้าเว็บ
+        logged_at=datetime.now()         # เวลา ณ ตอนที่กดเปลี่ยนสถานะ
+    )
     
+    # 3. สั่งเพิ่มลง Database
+    db.add(new_log)
+    db.commit()
+    db.refresh(new_log)
+
+    return {"message": "เพิ่มประวัติสถานะใหม่สำเร็จ", "current_status": new_log.status_type}
 
 # --- 9. Delivery Items ---
 @app.get("/delivery-items", response_model=list[schemas.DeliveryItemResponse])

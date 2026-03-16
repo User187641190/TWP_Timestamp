@@ -500,12 +500,12 @@ async function loadBills() {
                 <td class="p-4 font-medium">${b.recipient_name || '-'}</td>
                 <td class="p-4 text-gray-500">${b.recipient_phone || '-'}</td>
                 <td class="p-4">
-                    <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm bg-yellow-100 text-yellow-700">
-                        Pending
+                    <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm ${getStatusColor(b.status)}">
+                        ${b.status}
                     </span>
                 </td>
                 <td class="p-4 text-center">
-                    <button onclick="openModal(${b.id}, 'Pending')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
+                    <button onclick="openModal(${b.id}, '${b.status}')" class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100 text-xs transition">
                         <i class="fas fa-edit"></i> เปลี่ยนสถานะ
                     </button>
                 </td>
@@ -548,36 +548,151 @@ async function sendPost(endpoint, body) {
 }
 
 function getStatusColor(status) {
-    if(status === 'Delivered') return 'bg-green-100 text-green-700 border border-green-200';
-    if(status === 'Pending') return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
-    if(status === 'Cancel') return 'bg-red-100 text-red-700 border border-red-200';
-    return 'bg-gray-100 text-gray-700 border border-gray-200';
+    switch(status) {
+        case 'Await': 
+            return 'bg-yellow-100 text-yellow-800 border border-yellow-200'; // สีเหลือง
+        case 'Pending': 
+            return 'bg-blue-100 text-blue-800 border border-blue-200';   // สีฟ้า
+        case 'Delivered': 
+            return 'bg-green-100 text-green-800 border border-green-200'; // สีเขียว
+        case 'Cancel': 
+            return 'bg-red-100 text-red-800 border border-red-200';     // สีแดง
+        default: 
+            return 'bg-gray-100 text-gray-800 border border-gray-200';    // สีเทาเผื่อไว้
+    }
 }
 
 // Modal Logic
-function openModal(id, currentStatus) {
-    document.getElementById('modal_bill_id').value = id;
-    document.getElementById('modal_bill_display').innerText = id;
-    document.getElementById('modal_new_status').value = currentStatus;
+function openModal(billId) {
+    document.getElementById('modal_bill_id').value = billId; 
+    document.getElementById('modal_bill_display').innerText = billId; 
     document.getElementById('statusModal').classList.remove('hidden');
 }
 
 function closeModal() {
     document.getElementById('statusModal').classList.add('hidden');
+    // เคลียร์ค่าทิ้งเผื่อเปิดครั้งหน้า
+    document.getElementById('modal_bill_id').value = ''; 
+    document.getElementById('modal_new_status').value = 'Await';
 }
 
 async function saveStatus() {
-    const id = document.getElementById('modal_bill_id').value;
-    const status = document.getElementById('modal_new_status').value;
+    const billId = document.getElementById('modal_bill_id').value;
+    const select = document.getElementById('modal_new_status');
+    const status = select.value;
     const token = localStorage.getItem('token');
 
-    const res = await fetch(`${API_URL}/delivery-bills/${id}/status`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
-        body: JSON.stringify({ status: status })
-    });
-    if(res.ok) { closeModal(); loadBills(); }
-    else { alert("อัปเดตไม่สำเร็จ"); }
+    try {
+        const res = await fetch(`${API_URL}/delivery-bills/${billId}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status_type: status }) // ส่งตัวแปรให้ตรงกับ Schema
+        });
+
+        if(res.ok) { 
+            closeModal(); 
+            Swal.fire({
+                title: 'สำเร็จ!',
+                text: `อัปเดตสถานะบิล #${billId} เป็น "${status}" เรียบร้อยแล้ว`,
+                icon: 'success',
+                confirmButtonText: 'ตกลง',
+                confirmButtonColor: '#3b82f6'
+            }).then(() => {
+                // รีโหลดหน้าเว็บเพื่อให้ข้อมูลในตารางอัปเดต
+                window.location.reload(); 
+            });
+        } else { 
+            Swal.fire({
+                title: '❌ เกิดข้อผิดพลาด',
+                text: 'อัปเดตสถานะไม่สำเร็จ (ตรวจสอบข้อมูลอีกครั้ง)',
+                icon: 'error',
+                confirmButtonText: 'ตกลง',
+                confirmButtonColor: '#ef4444'
+            }); 
+        }
+    } catch (error) {
+        console.error("Error saving status:", error);
+    }
+}
+
+
+// loadtabledata
+
+async function loadTableData(viewName = "delivery-bills") { 
+    const token = localStorage.getItem('token');
+    
+    try {
+        const res = await fetch(`${API_URL}/${viewName}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (!data || data.length === 0) return;
+
+        const columns = Object.keys(data[0]);
+        const thead = document.querySelector('thead'); 
+        const tbody = document.querySelector('tbody'); 
+
+        // 3.1 สร้างหัวตาราง (Thead)
+        let thHtml = '<tr>';
+        columns.forEach(col => {
+            let niceName = col.replace(/_/g, ' ').toUpperCase();
+            thHtml += `<th class="p-3 border-b">${niceName}</th>`;
+        });
+        
+        // เพิ่มหัวตาราง "จัดการ" สำหรับใส่ปุ่ม
+        thHtml += `<th class="p-3 border-b text-center">จัดการ</th>`; 
+        thHtml += '</tr>';
+        thead.innerHTML = thHtml;
+
+        // 3.2 สร้างแถวข้อมูล (Tbody)
+        let tbHtml = '';
+        data.forEach((row, index) => {
+            const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            tbHtml += `<tr class="${bgClass} hover:bg-blue-50 transition border-b">`;
+            
+            columns.forEach(col => {
+                let cellValue = row[col];
+                if (cellValue === null || cellValue === undefined) cellValue = '-';
+                
+                // 🚨 ถ้าเป็นคอลัมน์ status ให้ใส่สีป้ายกำกับ
+                if (col.toLowerCase() === 'status' || col.toLowerCase() === 'status_type') {
+                    tbHtml += `<td class="p-3">
+                        <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm ${getStatusColor(cellValue)}">
+                            ${cellValue}
+                        </span>
+                    </td>`;
+                } 
+                else if (typeof cellValue === 'number') {
+                    // ใส่ลูกน้ำให้ตัวเลข
+                    cellValue = cellValue.toLocaleString('th-TH');
+                    tbHtml += `<td class="p-3">${cellValue}</td>`;
+                } else {
+                    tbHtml += `<td class="p-3">${cellValue}</td>`;
+                }
+            });
+
+            // 🚨 ดึง ID มาใส่ในปุ่มอัปเดต
+            const rowId = row.id || row.ID || row.bill_id;
+            tbHtml += `
+                <td class="p-3 text-center">
+                    <button onclick="openModal(${rowId})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded shadow-sm transition">
+                        อัปเดต
+                    </button>
+                </td>
+            `;
+
+            tbHtml += '</tr>'; // ปิดแถว
+        });
+        
+        tbody.innerHTML = tbHtml;
+
+    } catch (error) {
+        console.error("Error loading data:", error);
+    }
 }
 
 // ---- 7. CEO CHARTS ----
@@ -781,34 +896,41 @@ async function fetchAndDisplayView() {
             return;
         }
 
-        // 1. สร้างหัวตาราง (ดึงชื่อ Key จาก Object ตัวแรก)
-        const columns = Object.keys(data[0]);
+        // 1. เพิ่มหัวตาราง "จัดการ"
         let thHtml = '<tr>';
         columns.forEach(col => {
-            // ปรับชื่อคอลัมน์ให้ดูสวยขึ้น (เอา _ ออก และพิมพ์ใหญ่ตัวแรก)
             let niceName = col.replace(/_/g, ' ').toUpperCase();
             thHtml += `<th class="p-3 border-b">${niceName}</th>`;
         });
+        thHtml += `<th class="p-3 border-b text-center">จัดการ</th>`; // 🚨 เพิ่มบรรทัดนี้
         thHtml += '</tr>';
         thead.innerHTML = thHtml;
 
-        // 2. สร้างแถวข้อมูล
+        // 2. เพิ่มปุ่มในแต่ละแถวข้อมูล
         let tbHtml = '';
         data.forEach((row, index) => {
-            // สลับสีแถว (Zebra Striping)
             const bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
             tbHtml += `<tr class="${bgClass} hover:bg-blue-50 transition border-b">`;
             
             columns.forEach(col => {
                 let cellValue = row[col];
-                // เช็คค่า Null หรือ Undefined
                 if (cellValue === null || cellValue === undefined) cellValue = '-';
-                // ถ้าเป็นตัวเลข ให้ใส่ลูกน้ำ (Format Number)
                 if (typeof cellValue === 'number') {
                     cellValue = cellValue.toLocaleString('th-TH');
                 }
                 tbHtml += `<td class="p-3">${cellValue}</td>`;
             });
+
+            // 🚨 เพิ่มคอลัมน์ปุ่มอัปเดตตรงนี้ (ก่อนปิด </tr>)
+            const rowId = row.id || row.ID || row.bill_id;
+            tbHtml += `
+                <td class="p-3 text-center">
+                    <button onclick="openModal(${rowId})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded shadow-sm transition">
+                        อัปเดต
+                    </button>
+                </td>
+            `;
+
             tbHtml += '</tr>';
         });
         tbody.innerHTML = tbHtml;

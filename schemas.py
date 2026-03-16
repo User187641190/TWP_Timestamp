@@ -119,8 +119,22 @@ class DeliveryBillBase(BaseModel):
 class DeliveryBillCreate(DeliveryBillBase):
     pass
 
-class DeliveryBillResponse(DeliveryBillBase, OrmBase):
+# class DeliveryBillResponse(DeliveryBillBase, OrmBase):
+#     id: int
+
+class DeliveryBillResponse(BaseModel):
     id: int
+    customer_id: Optional[int]
+    employee_id: Optional[int]
+    vehicle_id: Optional[int]
+    destination_address: Optional[str]
+    recipient_name: str
+    recipient_phone: str
+    status: str 
+
+    class Config:
+        orm_mode = True
+
 
 # =========================
 # 9. Delivery Items
@@ -149,3 +163,10 @@ class DeliveryLogCreate(DeliveryLogBase):
 
 class DeliveryLogResponse(DeliveryLogBase, OrmBase):
     id: int
+
+class DeliveryLogStatusUpdate(BaseModel):
+    status_type: str
+
+
+class StatusUpdateSchema(BaseModel):
+    status: str
